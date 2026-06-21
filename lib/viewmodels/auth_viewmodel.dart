@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/database_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
   User? _user;
   bool _isLoading = false;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Mock fallbacks cho môi trường kiểm thử (Testing) khi chưa khởi tạo Firebase
   bool _mockAuthenticated = false;
@@ -51,8 +54,11 @@ class AuthViewModel extends ChangeNotifier {
     
     final auth = _auth;
     if (auth != null) {
-      auth.authStateChanges().listen((User? user) {
+      auth.authStateChanges().listen((User? user) async {
         _user = user;
+        if (user != null) {
+          await DatabaseService.instance.syncFromCloudOnLogin(user.uid);
+        }
         _isLoading = false;
         notifyListeners();
       });
@@ -75,6 +81,10 @@ class AuthViewModel extends ChangeNotifier {
     if (auth != null) {
       try {
         await auth.signInWithEmailAndPassword(email: email, password: password);
+        final currentUser = auth.currentUser;
+        if (currentUser != null) {
+          await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
+        }
         _isLoading = false;
         notifyListeners();
         return true;
@@ -83,6 +93,10 @@ class AuthViewModel extends ChangeNotifier {
         if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
           try {
             await auth.createUserWithEmailAndPassword(email: email, password: password);
+            final currentUser = auth.currentUser;
+            if (currentUser != null) {
+              await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
+            }
             _isLoading = false;
             notifyListeners();
             return true;
@@ -125,26 +139,63 @@ class AuthViewModel extends ChangeNotifier {
 
     final auth = _auth;
     if (auth != null) {
-      final mockEmail = provider == 'Google' ? 'gary.oak@oaklabs.com' : 'ash.ketchum@pallet.com';
-      final mockPassword = 'socialpassword123';
-      final mockName = provider == 'Google' ? 'Gary Oak' : 'Ash Ketchum';
-
-      try {
+      if (provider == 'Google') {
         try {
-          await auth.signInWithEmailAndPassword(email: mockEmail, password: mockPassword);
-        } on FirebaseAuthException catch (e) {
-          if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-            UserCredential userCred = await auth.createUserWithEmailAndPassword(email: mockEmail, password: mockPassword);
-            await userCred.user?.updateDisplayName(mockName);
-          } else {
-            rethrow;
+          // Bắt đầu luồng đăng nhập Google thực tế
+          final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+          if (googleUser == null) {
+            // Người dùng hủy đăng nhập
+            _isLoading = false;
+            notifyListeners();
+            return false;
           }
+
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+          final AuthCredential credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+
+          final UserCredential userCred = await auth.signInWithCredential(credential);
+          final currentUser = userCred.user;
+          if (currentUser != null) {
+            await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
+          }
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } catch (e) {
+          debugPrint('Lỗi đăng nhập Google thực tế: $e');
         }
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } catch (e) {
-        debugPrint('Social login simulation error: $e');
+      } else {
+        // Giả lập social login khác (như Nintendo) bằng email/pass Firebase
+        final mockEmail = 'ash.ketchum@pallet.com';
+        final mockPassword = 'socialpassword123';
+        final mockName = 'Ash Ketchum';
+
+        try {
+          UserCredential userCred;
+          try {
+            userCred = await auth.signInWithEmailAndPassword(email: mockEmail, password: mockPassword);
+          } on FirebaseAuthException catch (e) {
+            if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+              userCred = await auth.createUserWithEmailAndPassword(email: mockEmail, password: mockPassword);
+              await userCred.user?.updateDisplayName(mockName);
+            } else {
+              rethrow;
+            }
+          }
+          final currentUser = userCred.user;
+          if (currentUser != null) {
+            await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
+          }
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } catch (e) {
+          debugPrint('Social login simulation error: $e');
+        }
       }
     } else {
       // Giả lập social login khi chạy test
@@ -177,6 +228,9 @@ class AuthViewModel extends ChangeNotifier {
     final auth = _auth;
     if (auth != null) {
       await auth.signOut();
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
     } else {
       _mockAuthenticated = false;
       final prefs = await SharedPreferences.getInstance();
