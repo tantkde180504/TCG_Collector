@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/order_item.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../viewmodels/notification_viewmodel.dart';
+import '../widgets/payos_widgets.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -68,18 +70,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final notifVM = context.read<NotificationViewModel>();
     
     final order = await cartVM.submitOrder(authVM.email);
+    if (!mounted) return;
     
     if (order != null) {
-      setState(() {
-        _completedOrder = order;
-      });
-      // Add success order notification
-      notifVM.addNotification(
-        title: 'Order Placed Successfully!',
-        body: 'Your order ${order.orderId} for \$${order.totalAmount.toStringAsFixed(2)} is now processing.',
-        type: 'order_status',
-      );
-      cartVM.setCheckoutStep(2);
+      if (cartVM.selectedPaymentMethod == 'PayOS') {
+        if (!mounted) return;
+        
+        showPayOSPendingDialog(
+          context: context,
+          cartVM: cartVM,
+          order: order,
+          onPaymentVerified: (updatedOrder) {
+            setState(() {
+              _completedOrder = updatedOrder;
+            });
+          },
+        );
+      } else {
+        setState(() {
+          _completedOrder = order;
+        });
+        // Add success order notification
+        notifVM.addNotification(
+          title: 'Order Placed Successfully!',
+          body: 'Your order ${order.orderId} for \$${order.totalAmount.toStringAsFixed(2)} is now processing.',
+          type: 'order_status',
+        );
+        cartVM.setCheckoutStep(2);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -89,6 +107,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +333,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             _buildPaymentCard(cartVM, 'PayPal', Icons.payment),
             const SizedBox(width: 8),
             _buildPaymentCard(cartVM, 'PokeGold', Icons.catching_pokemon),
+            const SizedBox(width: 8),
+            _buildPaymentCard(cartVM, 'PayOS', Icons.qr_code),
           ],
         ),
         const SizedBox(height: 24),
@@ -412,6 +434,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ],
             ),
           ),
+
+        if (cartVM.selectedPaymentMethod == 'PayOS')
+          PayOSPaymentInfo(grandTotal: cartVM.grandTotal),
           
         const SizedBox(height: 24),
         const Divider(color: Colors.white24),

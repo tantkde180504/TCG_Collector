@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:math';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
 import '../services/database_service.dart';
+import '../services/payos_service.dart';
 
 class CartViewModel extends ChangeNotifier {
   final DatabaseService _db = DatabaseService.instance;
@@ -21,6 +23,8 @@ class CartViewModel extends ChangeNotifier {
   String _shippingPhone = '';
   String _shippingAddress = '';
   String _selectedPaymentMethod = 'Credit Card';
+  String? _lastCheckoutUrl;
+  Map<String, dynamic>? _lastPayOSData;
 
   List<CartItem> get items => _items;
   List<OrderItem> get orders => _orders;
@@ -33,6 +37,8 @@ class CartViewModel extends ChangeNotifier {
   String get shippingPhone => _shippingPhone;
   String get shippingAddress => _shippingAddress;
   String get selectedPaymentMethod => _selectedPaymentMethod;
+  String? get lastCheckoutUrl => _lastCheckoutUrl;
+  Map<String, dynamic>? get lastPayOSData => _lastPayOSData;
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
   double get discountAmount => subtotal * _discountPercent;
@@ -151,18 +157,69 @@ class CartViewModel extends ChangeNotifier {
     if (_items.isEmpty) return null;
 
     _isLoading = true;
+    _lastCheckoutUrl = null;
+    _lastPayOSData = null;
     notifyListeners();
 
     try {
       final random = Random();
-      final orderId = 'ORD-${DateTime.now().millisecondsSinceEpoch}-${random.nextInt(1000)}';
       
+      String orderId;
+      String orderStatus = 'Processing';
+      
+      if (_selectedPaymentMethod == 'PayOS') {
+        // PayOS orderCode must be a positive integer.
+        // We'll use DateTime.now().millisecondsSinceEpoch to get a unique int64.
+        final int orderCode = DateTime.now().millisecondsSinceEpoch;
+        orderId = orderCode.toString();
+        orderStatus = 'Unpaid';
+        
+        final int amountVnd = (grandTotal * 25000).round();
+        final List<Map<String, dynamic>> payosItems = _items.map((it) => {
+          'name': it.card.name,
+          'quantity': it.quantity,
+          'price': (it.card.marketPrice * 25000).round(),
+        }).toList();
+
+        String cancelUrl = 'https://tcgcollector.com/cancel';
+        String returnUrl = 'https://tcgcollector.com/success';
+        
+        if (kIsWeb) {
+          try {
+            final origin = Uri.base.origin;
+            cancelUrl = '$origin/#/checkout?status=cancel';
+            returnUrl = '$origin/#/checkout?status=success';
+          } catch (_) {}
+        } else {
+          cancelUrl = 'tcgcollector://payment-cancel';
+          returnUrl = 'tcgcollector://payment-success';
+        }
+
+        final res = await PayosService.createPaymentLink(
+          orderCode: orderCode,
+          amount: amountVnd,
+          description: 'TCG Order $orderCode',
+          cancelUrl: cancelUrl,
+          returnUrl: returnUrl,
+          items: payosItems,
+        );
+
+        if (res == null) {
+          throw Exception('Failed to generate PayOS checkout link');
+        }
+
+        _lastPayOSData = res;
+        _lastCheckoutUrl = res['checkoutUrl'];
+      } else {
+        orderId = 'ORD-${DateTime.now().millisecondsSinceEpoch}-${random.nextInt(1000)}';
+      }
+
       final order = OrderItem(
         orderId: orderId,
         userId: userId,
         items: List.from(_items),
         totalAmount: grandTotal,
-        status: 'Processing',
+        status: orderStatus,
         timestamp: DateTime.now(),
         shippingAddress: '$_shippingName, $_shippingPhone\n$_shippingAddress',
         paymentMethod: _selectedPaymentMethod,
@@ -171,12 +228,15 @@ class CartViewModel extends ChangeNotifier {
       await _db.saveOrder(order);
       _orders.insert(0, order); // Add to local cache list at top
 
-      // Clear DB cart and local cart
-      await clearCart();
-      
-      // Reset coupon discount and step
-      _appliedCoupon = '';
-      _discountPercent = 0.0;
+      // Clear DB cart and local cart for non-PayOS methods
+      // For PayOS, we only clear the cart upon payment verification
+      if (_selectedPaymentMethod != 'PayOS') {
+        await clearCart();
+        
+        // Reset coupon discount
+        _appliedCoupon = '';
+        _discountPercent = 0.0;
+      }
       
       _isLoading = false;
       notifyListeners();
@@ -187,6 +247,54 @@ class CartViewModel extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  Future<bool> verifyPayOSPayment(String orderId) async {
+    final orderCode = int.tryParse(orderId);
+    if (orderCode == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final status = await PayosService.getPaymentStatus(orderCode);
+      if (status == 'PAID') {
+        // Find order in local cache and update
+        final index = _orders.indexWhere((o) => o.orderId == orderId);
+        if (index >= 0) {
+          final updatedOrder = OrderItem(
+            orderId: _orders[index].orderId,
+            userId: _orders[index].userId,
+            items: _orders[index].items,
+            totalAmount: _orders[index].totalAmount,
+            status: 'Processing',
+            timestamp: _orders[index].timestamp,
+            shippingAddress: _orders[index].shippingAddress,
+            paymentMethod: _orders[index].paymentMethod,
+          );
+          
+          await _db.saveOrder(updatedOrder);
+          _orders[index] = updatedOrder;
+          
+          // Clear cart now that payment is confirmed
+          await clearCart();
+          
+          // Reset coupon discount
+          _appliedCoupon = '';
+          _discountPercent = 0.0;
+        }
+        
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error verifying PayOS payment: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<void> loadOrders(String userId, List<PokemonCard> catalog) async {
