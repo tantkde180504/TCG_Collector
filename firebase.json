@@ -1,0 +1,38 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tcg-collector-55418",
+          "appId": "1:684638928442:android:fdc890b8d15046fca5ff03",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tcg-collector-55418",
+          "configurations": {
+            "android": "1:684638928442:android:fdc890b8d15046fca5ff03",
+            "web": "1:684638928442:web:7f2e858c06acf4cea5ff03",
+            "windows": "1:684638928442:web:5af568af8fb4d19ea5ff03"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": []
+    }
+  ]
+}

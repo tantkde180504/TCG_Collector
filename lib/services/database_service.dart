@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'mock_catalog.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
@@ -45,6 +49,157 @@ class DatabaseService {
       debugPrint('SQLite initialization failed, self-healing to memory fallback: $e');
       _forceFallback = true;
       return null;
+    }
+  }
+
+  bool get _isFirebaseInitialized {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> _hasInternet() async {
+    if (kIsWeb) return true;
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _syncCartItemToCloud(String cardId, int quantity) async {
+    if (!_isFirebaseInitialized) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && await _hasInternet()) {
+      try {
+        final docRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('cart')
+            .doc(cardId);
+        if (quantity <= 0) {
+          await docRef.delete();
+        } else {
+          await docRef.set({
+            'card_id': cardId,
+            'quantity': quantity,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (e) {
+        debugPrint('Failed to sync cart item to Firestore: $e');
+      }
+    }
+  }
+
+  Future<void> _clearCartCloud() async {
+    if (!_isFirebaseInitialized) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && await _hasInternet()) {
+      try {
+        final cartSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('cart')
+            .get();
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in cartSnapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      } catch (e) {
+        debugPrint('Failed to clear cart in Firestore: $e');
+      }
+    }
+  }
+
+  Future<void> _syncOrderToCloud(OrderItem order) async {
+    if (!_isFirebaseInitialized) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && await _hasInternet()) {
+      try {
+        final orderMap = order.toMap();
+        final numericId = int.tryParse(order.orderId.replaceAll(RegExp(r'\D'), '')) ?? DateTime.now().millisecondsSinceEpoch;
+        orderMap['orderCode'] = numericId;
+        orderMap['sync_timestamp'] = FieldValue.serverTimestamp();
+        
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('orders')
+            .doc(order.orderId)
+            .set(orderMap);
+      } catch (e) {
+        debugPrint('Failed to sync order to Firestore: $e');
+      }
+    }
+  }
+
+  Future<void> syncFromCloudOnLogin(String userId) async {
+    if (!_isFirebaseInitialized) return;
+    if (!await _hasInternet()) return;
+    
+    try {
+      // 1. Sync Cart
+      final cartSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('cart')
+          .get();
+          
+      final db = await database;
+      if (db != null) {
+        await db.delete('cart');
+        final batch = db.batch();
+        for (var doc in cartSnapshot.docs) {
+          final data = doc.data();
+          batch.insert('cart', {
+            'card_id': doc.id,
+            'quantity': data['quantity'] ?? 1,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await batch.commit();
+      } else {
+        _fallbackCart.clear();
+        for (var doc in cartSnapshot.docs) {
+          final data = doc.data();
+          _fallbackCart[doc.id] = data['quantity'] ?? 1;
+        }
+      }
+      
+      // 2. Sync Orders
+      final ordersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('orders')
+          .get();
+          
+      if (db != null) {
+        for (var doc in ordersSnapshot.docs) {
+          final data = doc.data();
+          final dbMap = Map<String, dynamic>.from(data);
+          dbMap.remove('sync_timestamp');
+          dbMap.remove('orderCode');
+          await db.insert('orders', dbMap, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      } else {
+        for (var doc in ordersSnapshot.docs) {
+          final data = doc.data();
+          final dbMap = Map<String, dynamic>.from(data);
+          dbMap.remove('sync_timestamp');
+          dbMap.remove('orderCode');
+          final exists = _fallbackOrders.any((o) => o['order_id'] == doc.id);
+          if (!exists) {
+            _fallbackOrders.add(dbMap);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to sync from cloud on login: $e');
     }
   }
 
@@ -110,7 +265,56 @@ class DatabaseService {
   }
 
   // --- CARDS CATALOG ---
+  Future<void> initializeFirestoreCatalog() async {
+    if (!_isFirebaseInitialized) return;
+    try {
+      final collection = FirebaseFirestore.instance.collection('cards');
+      final snapshot = await collection.limit(1).get();
+      if (snapshot.docs.isEmpty) {
+        final defaultCards = MockCatalog.getCards();
+        final batch = FirebaseFirestore.instance.batch();
+        for (var card in defaultCards) {
+          final docRef = collection.doc(card.id);
+          batch.set(docRef, card.toMap());
+        }
+        await batch.commit();
+        debugPrint('Successfully seeded Firestore catalog with mock cards.');
+      }
+    } catch (e) {
+      debugPrint('Failed to seed Firestore catalog: $e');
+    }
+  }
+
   Future<List<PokemonCard>> getCards() async {
+    // 1. Tự động tải danh sách thẻ bài lên Firestore nếu db trống
+    await initializeFirestoreCatalog();
+
+    // 2. Lấy dữ liệu sản phẩm từ Firestore nếu có mạng làm nguồn tin cậy
+    if (_isFirebaseInitialized && await _hasInternet()) {
+      try {
+        final snapshot = await FirebaseFirestore.instance.collection('cards').get();
+        final List<PokemonCard> firestoreCards = snapshot.docs
+            .map((doc) => PokemonCard.fromMap(doc.data()))
+            .toList();
+
+        // Lưu cache cục bộ xuống SQLite để hỗ trợ offline
+        final db = await database;
+        if (db != null) {
+          final batch = db.batch();
+          for (var card in firestoreCards) {
+            batch.insert('cards', card.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+          await batch.commit();
+        } else {
+          _fallbackCards = firestoreCards;
+        }
+        return firestoreCards;
+      } catch (e) {
+        debugPrint('Failed to fetch cards from Firestore: $e. Falling back to local/mock.');
+      }
+    }
+
+    // 3. Dự phòng: lấy từ SQLite cục bộ hoặc mock catalog
     final db = await database;
     if (_useFallback || db == null) {
       if (_fallbackCards.isEmpty) {
@@ -199,21 +403,26 @@ class DatabaseService {
     final db = await database;
     if (_useFallback || db == null) {
       _fallbackCart[cardId] = (_fallbackCart[cardId] ?? 0) + quantity;
+      await _syncCartItemToCloud(cardId, _fallbackCart[cardId]!);
       return;
     }
 
     try {
+      int newQty = quantity;
       final existing = await db.query('cart', where: 'card_id = ?', whereArgs: [cardId]);
       if (existing.isNotEmpty) {
         final currentQty = existing.first['quantity'] as int;
-        await db.update('cart', {'quantity': currentQty + quantity},
+        newQty = currentQty + quantity;
+        await db.update('cart', {'quantity': newQty},
             where: 'card_id = ?', whereArgs: [cardId]);
       } else {
         await db.insert('cart', {'card_id': cardId, 'quantity': quantity});
       }
+      await _syncCartItemToCloud(cardId, newQty);
     } catch (e) {
       debugPrint('Failed write to SQLite cart: $e');
       _fallbackCart[cardId] = (_fallbackCart[cardId] ?? 0) + quantity;
+      await _syncCartItemToCloud(cardId, _fallbackCart[cardId]!);
     }
   }
 
@@ -225,6 +434,7 @@ class DatabaseService {
       } else {
         _fallbackCart[cardId] = quantity;
       }
+      await _syncCartItemToCloud(cardId, quantity);
       return;
     }
 
@@ -234,6 +444,7 @@ class DatabaseService {
       } else {
         await db.update('cart', {'quantity': quantity}, where: 'card_id = ?', whereArgs: [cardId]);
       }
+      await _syncCartItemToCloud(cardId, quantity);
     } catch (e) {
       debugPrint('Failed update SQLite quantity: $e');
       if (quantity <= 0) {
@@ -241,6 +452,7 @@ class DatabaseService {
       } else {
         _fallbackCart[cardId] = quantity;
       }
+      await _syncCartItemToCloud(cardId, quantity);
     }
   }
 
@@ -248,14 +460,17 @@ class DatabaseService {
     final db = await database;
     if (_useFallback || db == null) {
       _fallbackCart.remove(cardId);
+      await _syncCartItemToCloud(cardId, 0);
       return;
     }
 
     try {
       await db.delete('cart', where: 'card_id = ?', whereArgs: [cardId]);
+      await _syncCartItemToCloud(cardId, 0);
     } catch (e) {
       debugPrint('Failed delete from SQLite cart: $e');
       _fallbackCart.remove(cardId);
+      await _syncCartItemToCloud(cardId, 0);
     }
   }
 
@@ -263,14 +478,17 @@ class DatabaseService {
     final db = await database;
     if (_useFallback || db == null) {
       _fallbackCart.clear();
+      await _clearCartCloud();
       return;
     }
 
     try {
       await db.delete('cart');
+      await _clearCartCloud();
     } catch (e) {
       debugPrint('Failed clear SQLite cart: $e');
       _fallbackCart.clear();
+      await _clearCartCloud();
     }
   }
 
@@ -294,14 +512,17 @@ class DatabaseService {
     final db = await database;
     if (_useFallback || db == null) {
       _fallbackOrders.add(order.toMap());
+      await _syncOrderToCloud(order);
       return;
     }
 
     try {
       await db.insert('orders', order.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      await _syncOrderToCloud(order);
     } catch (e) {
       debugPrint('Failed save SQLite order: $e');
       _fallbackOrders.add(order.toMap());
+      await _syncOrderToCloud(order);
     }
   }
 
