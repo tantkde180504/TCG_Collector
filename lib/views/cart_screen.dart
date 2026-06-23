@@ -17,12 +17,14 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
-    final cartVM = context.read<CartViewModel>();
-    final catalogVM = context.read<CatalogViewModel>();
-    // Pre-sync cart with the active database catalog
-    cartVM.loadCart(catalogVM.cards);
-  }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cartVM = context.read<CartViewModel>();
+      final catalogVM = context.read<CatalogViewModel>();
+
+      cartVM.loadCart(catalogVM.cards);
+    });
+  }
   @override
   void dispose() {
     _couponController.dispose();
