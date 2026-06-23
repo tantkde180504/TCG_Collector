@@ -2,71 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import 'home_screen.dart';
-import 'register_screen.dart';
-import 'device_verification_screen.dart';
-import 'forgot_password_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() async {
+  void _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       final authVM = context.read<AuthViewModel>();
-      final result = await authVM.login(
+      final success = await authVM.register(
         _emailController.text,
         _passwordController.text,
+        _nameController.text,
       );
 
       if (mounted) {
-        if (result == LoginResult.success) {
+        if (success) {
+          // Gửi thông báo thành công
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Welcome to the Pokémon World.'),
+              backgroundColor: Colors.green,
+            ),
+          );
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        } else if (result == LoginResult.verificationRequired) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => DeviceVerificationScreen(
-                email: _emailController.text,
-                password: _passwordController.text,
-              ),
-            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Login failed! Please check your credentials.'),
+              content: Text('Registration failed! Please try again.'),
               backgroundColor: Colors.redAccent,
             ),
           );
         }
       }
-    }
-  }
-
-  void _handleSocialLogin(String provider) async {
-    final authVM = context.read<AuthViewModel>();
-    final success = await authVM.loginSocial(provider);
-    if (mounted && success) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
     }
   }
 
@@ -76,6 +67,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -89,33 +88,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 Column(
                   children: [
                     Container(
-                      width: 90,
-                      height: 90,
+                      width: 70,
+                      height: 70,
                       decoration: BoxDecoration(
                         color: Colors.amber,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color: Colors.amber.withOpacity(0.4),
-                            blurRadius: 20,
-                            spreadRadius: 5,
+                            blurRadius: 15,
+                            spreadRadius: 3,
                           )
                         ],
                       ),
                       child: const Center(
                         child: Icon(
                           Icons.catching_pokemon,
-                          size: 60,
+                          size: 45,
                           color: Colors.red,
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'POKÉMON TCG',
+                      'JOIN THE PORTAL',
                       style: TextStyle(
                         fontFamily: 'Outfit',
-                        fontSize: 28,
+                        fontSize: 24,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2.0,
                         color: Colors.amber,
@@ -128,20 +127,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                    const Text(
-                      'TRAINER PORTAL',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        letterSpacing: 4.0,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 
-                // Login card (Glassmorphic look)
+                // Register card (Glassmorphic look)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -152,6 +142,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Name Input
+                      TextFormField(
+                        controller: _nameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.person, color: Colors.amber),
+                          labelText: 'Trainer Name',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.white30),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.amber),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       // Email Input
                       TextFormField(
                         controller: _emailController,
@@ -213,33 +228,51 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(50, 30),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      const SizedBox(height: 16),
+                      // Confirm Password Input
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.lock_outline, color: Colors.amber),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                              color: Colors.white70,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword = !_obscureConfirmPassword;
+                              });
+                            },
                           ),
-                          child: const Text(
-                            'Forgot Password?',
-                            style: TextStyle(color: Colors.amber, fontSize: 12),
+                          labelText: 'Confirm Secret Code',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.white30),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.amber),
                           ),
                         ),
+                        validator: (value) {
+                          if (value != _passwordController.text) {
+                            return 'Codes do not match';
+                          }
+                          return null;
+                        },
                       ),
-                      const SizedBox(height: 16),
-                      // Sign In Button
+                      const SizedBox(height: 24),
+                      // Register Button
                       SizedBox(
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: authVM.isLoading ? null : _handleLogin,
+                          onPressed: authVM.isLoading ? null : _handleRegister,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent.shade700,
+                            backgroundColor: Colors.blueAccent.shade700,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -252,95 +285,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                 )
                               : const Text(
-                                  'ENTER POKÉMON WORLD',
+                                  'BECOME A TRAINER',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      
-                      // Auto-fill Test Credentials helper
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _emailController.text = 'trainer.red@kanto.com';
-                            _passwordController.text = '123456';
-                          });
-                        },
-                        child: const Text(
-                          'Use Demo Credentials (trainer.red@kanto.com)',
-                          style: TextStyle(color: Colors.amber, fontSize: 11),
-                        ),
-                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                    );
-                  },
-                  child: RichText(
-                    text: const TextSpan(
-                      text: "Don't have an account? ",
-                      style: TextStyle(color: Colors.white70),
-                      children: [
-                        TextSpan(
-                          text: "Register now",
-                          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Social Logins
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: Colors.white30)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text('OR CONNECT VIA', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
-                    ),
-                    const Expanded(child: Divider(color: Colors.white30)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Google mock button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: authVM.isLoading ? null : () => _handleSocialLogin('Google'),
-                        icon: const Icon(Icons.g_mobiledata, color: Colors.blue, size: 28),
-                        label: const Text('Google', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Nintendo mock button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: authVM.isLoading ? null : () => _handleSocialLogin('Nintendo'),
-                        icon: const Icon(Icons.sports_esports, color: Colors.redAccent, size: 20),
-                        label: const Text('Nintendo', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const PayOS = require("@payos/node");
+const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
@@ -83,3 +84,50 @@ exports.payosWebhook = functions.https.onRequest(async (req, res) => {
         res.status(400).send("Webhook Verification Failed");
     }
 });
+
+// 3. TRIGGER: Gửi Email chứa mã xác minh khi có mã mới được lưu bằng Gmail
+exports.onVerificationCodeCreated = functions.firestore
+    .document("verification_codes/{email}")
+    .onCreate(async (snap, context) => {
+        const newValue = snap.data();
+        const email = context.params.email;
+        const code = newValue.code;
+
+        console.log(`Bắt đầu gửi mã xác minh [${code}] đến email: ${email}`);
+
+        // Cấu hình Nodemailer với Gmail
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.GMAIL_EMAIL,
+                pass: process.env.GMAIL_APP_PASSWORD
+            }
+        });
+
+        const mailOptions = {
+            from: `"Pokémon TCG Collector" <${process.env.GMAIL_EMAIL}>`,
+            to: email,
+            subject: 'Mã Xác Minh Thiết Bị - Pokémon TCG Collector',
+            text: `Chào Trainer,\n\nPhát hiện thiết bị đăng nhập mới. Mã xác minh của bạn là: ${code}\n\nVui lòng nhập mã này vào ứng dụng để tiếp tục. Mã này chỉ có hiệu lực cho một lần đăng nhập.\n\nTrân trọng,\nĐội ngũ Pokémon TCG`,
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2>Chào Trainer!</h2>
+                    <p>Hệ thống phát hiện tài khoản của bạn đang được đăng nhập từ một thiết bị mới.</p>
+                    <p>Mã xác minh thiết bị của bạn là:</p>
+                    <h1 style="color: #FFCC00; background: #121212; display: inline-block; padding: 10px 20px; border-radius: 5px; letter-spacing: 5px;">${code}</h1>
+                    <p>Vui lòng nhập mã này vào ứng dụng để tiếp tục cuộc phiêu lưu của bạn.</p>
+                    <br>
+                    <p><i>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</i></p>
+                </div>
+            `
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            console.log(`Gửi email thành công tới ${email}`);
+            return { success: true };
+        } catch (error) {
+            console.error("Lỗi khi gửi email:", error);
+            return { success: false, error: error.toString() };
+        }
+    });
