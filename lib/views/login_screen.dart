@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.amber.withOpacity(0.4),
+                            color: Colors.amber.withValues(alpha: 0.4),
                             blurRadius: 20,
                             spreadRadius: 5,
                           )
@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -303,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Expanded(child: Divider(color: Colors.white30)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text('OR CONNECT VIA', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                      child: Text('OR CONNECT VIA', style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
                     ),
                     const Expanded(child: Divider(color: Colors.white30)),
                   ],
