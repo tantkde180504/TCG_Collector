@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' as io;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
@@ -31,6 +32,7 @@ class DatabaseService {
   bool get _useFallback =>
       _forceFallback ||
       kIsWeb ||
+      (!kIsWeb && (!io.Platform.isAndroid && !io.Platform.isIOS)) ||
       (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.windows ||
               defaultTargetPlatform == TargetPlatform.macOS ||
