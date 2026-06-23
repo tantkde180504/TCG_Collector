@@ -20,7 +20,7 @@ class CatalogViewModel extends ChangeNotifier {
   String get sortBy => _sortBy;
 
   CatalogViewModel() {
-    loadCatalog();
+    Future.microtask(() => loadCatalog());
   }
 
   Future<void> loadCatalog() async {
