@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "684638928442",
+    "project_id": "tcg-collector-55418",
+    "storage_bucket": "tcg-collector-55418.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:684638928442:android:fdc890b8d15046fca5ff03",
+        "android_client_info": {
+          "package_name": "com.example.tcg"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "684638928442-di1ckik7gnjpjidtnhfgo74jkqda4rjq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.tcg",
+            "certificate_hash": "d7874e0d985b1f33f0b73ffa00c06c0c63dc515b"
+          }
+        },
+        {
+          "client_id": "684638928442-40o4ite216knag8bol1na2ofq8munmiv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKJ4A12caw0aXSOnxSfHhR7R2bDmT1IYg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "684638928442-40o4ite216knag8bol1na2ofq8munmiv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

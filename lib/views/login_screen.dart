@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import 'home_screen.dart';
+import 'register_screen.dart';
+import 'device_verification_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,20 +29,29 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       final authVM = context.read<AuthViewModel>();
-      final success = await authVM.login(
+      final result = await authVM.login(
         _emailController.text,
         _passwordController.text,
       );
 
       if (mounted) {
-        if (success) {
+        if (result == LoginResult.success) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        } else if (result == LoginResult.verificationRequired) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => DeviceVerificationScreen(
+                email: _emailController.text,
+                password: _passwordController.text,
+              ),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Login failed! Password must be at least 6 characters.'),
+              content: Text('Login failed! Please check your credentials.'),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -201,7 +213,26 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(50, 30),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(color: Colors.amber, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       // Sign In Button
                       SizedBox(
                         height: 48,
@@ -242,6 +273,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                    );
+                  },
+                  child: RichText(
+                    text: const TextSpan(
+                      text: "Don't have an account? ",
+                      style: TextStyle(color: Colors.white70),
+                      children: [
+                        TextSpan(
+                          text: "Register now",
+                          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
