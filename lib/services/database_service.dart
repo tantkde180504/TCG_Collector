@@ -303,35 +303,33 @@ class DatabaseService {
     }
   }
 
+  ChatMessage _welcomeMessage() {
+    return ChatMessage(
+      id: 'welcome',
+      senderId: 'support',
+      senderName: 'Prof. Oak (Groq AI)',
+      text:
+          'Xin chào Trainer! Tôi là Professor Oak, trợ lý AI của Pokémon TCG Collector. '
+          'Hãy hỏi tôi về thẻ bài, bộ deck, giao hàng hoặc đơn hàng nhé!',
+      timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
+    );
+  }
+
   // --- MESSAGES / SUPPORT CHAT ---
   Future<List<ChatMessage>> getMessages() async {
     final db = await database;
     if (_useFallback || db == null) {
       if (_fallbackMessages.isEmpty) {
-        final welcome = ChatMessage(
-          id: 'welcome',
-          senderId: 'support',
-          senderName: 'Prof. Oak',
-          text:
-              'Hello Trainer! Welcome to the Pokémon TCG Collector Support Desk. I am Professor Oak. How can I assist you with your cards, decks, or orders today?',
-          timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-        );
-        _fallbackMessages.add(welcome.toMap());
+        _fallbackMessages.add(_welcomeMessage().toMap());
       }
       return _fallbackMessages.map((m) => ChatMessage.fromMap(m)).toList();
     }
 
     try {
-      final List<Map<String, dynamic>> maps = await db.query('messages', orderBy: 'timestamp ASC');
+      final List<Map<String, dynamic>> maps =
+          await db.query('messages', orderBy: 'timestamp ASC');
       if (maps.isEmpty) {
-        final welcome = ChatMessage(
-          id: 'welcome',
-          senderId: 'support',
-          senderName: 'Prof. Oak',
-          text:
-              'Hello Trainer! Welcome to the Pokémon TCG Collector Support Desk. I am Professor Oak. How can I assist you with your cards today?',
-          timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-        );
+        final welcome = _welcomeMessage();
         await db.insert('messages', welcome.toMap());
         return [welcome];
       }
@@ -350,10 +348,30 @@ class DatabaseService {
     }
 
     try {
-      await db.insert('messages', message.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      await db.insert('messages', message.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
     } catch (e) {
       debugPrint('Failed save SQLite message: $e');
       _fallbackMessages.add(message.toMap());
+    }
+  }
+
+  Future<void> clearMessages() async {
+    final db = await database;
+    if (_useFallback || db == null) {
+      _fallbackMessages.clear();
+      _fallbackMessages.add(_welcomeMessage().toMap());
+      return;
+    }
+
+    try {
+      await db.delete('messages');
+      final welcome = _welcomeMessage();
+      await db.insert('messages', welcome.toMap());
+    } catch (e) {
+      debugPrint('Failed clear SQLite messages: $e');
+      _fallbackMessages.clear();
+      _fallbackMessages.add(_welcomeMessage().toMap());
     }
   }
 }

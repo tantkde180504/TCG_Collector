@@ -17,10 +17,17 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
-    final cartVM = context.read<CartViewModel>();
-    final catalogVM = context.read<CatalogViewModel>();
-    // Pre-sync cart with the active database catalog
-    cartVM.loadCart(catalogVM.cards);
+    
+    // Sử dụng addPostFrameCallback để tránh lỗi "setState() called during build"
+    // khi gọi loadCart và notifyListeners() ngay trong initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final cartVM = context.read<CartViewModel>();
+        final catalogVM = context.read<CatalogViewModel>();
+        // Pre-sync cart with the active database catalog
+        cartVM.loadCart(catalogVM.cards);
+      }
+    });
   }
 
   @override
