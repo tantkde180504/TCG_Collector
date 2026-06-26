@@ -29,14 +29,6 @@ class _CartScreenState extends State<CartScreen> {
       }
     });
   }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final cartVM = context.read<CartViewModel>();
-      final catalogVM = context.read<CatalogViewModel>();
-
-      cartVM.loadCart(catalogVM.cards);
-    });
-  }
   @override
   void dispose() {
     _couponController.dispose();
@@ -111,7 +103,7 @@ class _CartScreenState extends State<CartScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                   ),
                   child: Row(
                     children: [

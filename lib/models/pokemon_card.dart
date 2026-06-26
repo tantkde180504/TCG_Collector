@@ -51,15 +51,37 @@ class PokemonCard {
   // Create a PokemonCard from a Map.
   factory PokemonCard.fromMap(Map<String, dynamic> map) {
     List<double> history;
-    if (map['price_history'] != null && map['price_history'].toString().isNotEmpty) {
-      history = map['price_history']
-          .toString()
-          .split(',')
-          .map((e) => double.tryParse(e) ?? 0.0)
-          .toList();
+    final rawHistory = map['price_history'];
+    if (rawHistory != null) {
+      if (rawHistory is List) {
+        // Firestore Array type: [115.0, 118.0, ...]
+        history = rawHistory
+            .map((e) => (e as num?)?.toDouble() ?? 0.0)
+            .where((v) => v > 0 && !v.isNaN && !v.isInfinite)
+            .toList();
+      } else {
+        // String type (SQLite or old Firestore): "115.0,118.0,..."
+        final str = rawHistory.toString().trim();
+        // Strip surrounding brackets if present: "[115.0, 118.0]"
+        final cleaned = str.startsWith('[') && str.endsWith(']')
+            ? str.substring(1, str.length - 1)
+            : str;
+        history = cleaned
+            .split(',')
+            .map((e) => double.tryParse(e.trim()) ?? 0.0)
+            .where((v) => v > 0 && !v.isNaN && !v.isInfinite)
+            .toList();
+      }
     } else {
-      history = [map['market_price'] ?? 0.0];
+      history = [];
     }
+
+    // Fallback: nếu history rỗng, dùng marketPrice làm điểm duy nhất
+    if (history.isEmpty) {
+      final mp = (map['market_price'] as num?)?.toDouble() ?? 0.0;
+      if (mp > 0) history = [mp];
+    }
+
 
     return PokemonCard(
       id: map['card_id'] ?? '',

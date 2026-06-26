@@ -59,7 +59,7 @@ class PokemonCardWidget extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.2),
+                    color: typeColor.withValues(alpha: 0.2),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   ),
                   child: Stack(
@@ -84,18 +84,18 @@ class PokemonCardWidget extends StatelessWidget {
                           return Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [typeColor.withOpacity(0.8), Colors.black87],
+                                colors: [typeColor.withValues(alpha: 0.8), Colors.black87],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
                             ),
                             child: Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.style, color: Colors.amber.withOpacity(0.8), size: 36),
+                                  Icon(Icons.style, color: Colors.amber.withValues(alpha: 0.8), size: 36),
                                   const SizedBox(height: 4),
                                   Text(
                                     card.name,
@@ -109,7 +109,7 @@ class PokemonCardWidget extends StatelessWidget {
                                   Text(
                                     card.type,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
+                                      color: Colors.white.withValues(alpha: 0.6),
                                       fontSize: 8,
                                     ),
                                   ),
@@ -128,7 +128,7 @@ class PokemonCardWidget extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.black87,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.amber.withOpacity(0.5), width: 0.5),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 0.5),
                           ),
                           child: Text(
                             card.rarity,
@@ -163,7 +163,7 @@ class PokemonCardWidget extends StatelessWidget {
                         Text(
                           card.type,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
+                            color: Colors.white.withValues(alpha: 0.5),
                             fontSize: 11,
                           ),
                         ),

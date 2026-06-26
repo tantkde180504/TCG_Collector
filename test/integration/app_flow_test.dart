@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:tcg/main.dart';
 import 'package:tcg/viewmodels/auth_viewmodel.dart';
 import 'package:tcg/viewmodels/catalog_viewmodel.dart';
 import 'package:tcg/viewmodels/cart_viewmodel.dart';
@@ -42,7 +41,6 @@ void main() {
               primary: Colors.amber,
               secondary: Colors.redAccent,
               surface: Color(0xFF1E1E1E),
-              background: Color(0xFF121212),
               error: Colors.redAccent,
             ),
             scaffoldBackgroundColor: const Color(0xFF121212),
@@ -111,10 +109,10 @@ void main() {
         'Complete Purchase Flow - Login > Catalog > Add to Cart > Checkout',
         (WidgetTester tester) async {
       // Dùng kích thước thực tế thay vì 180x360 (quá nhỏ gây overflow)
-      tester.binding.window.physicalSizeTestValue = const Size(1080, 1920);
-      tester.binding.window.devicePixelRatioTestValue = 2.0;
-      addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
-      addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(createApp());
 
@@ -264,17 +262,17 @@ void main() {
     testWidgets(
         'Multi-device Support - App should render on different screen sizes',
         (WidgetTester tester) async {
-      tester.binding.window.physicalSizeTestValue = const Size(800, 1600);
-      tester.binding.window.devicePixelRatioTestValue = 2.0;
-      addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
-      addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(createApp());
 
       expect(find.byType(Scaffold), findsWidgets);
 
-      tester.binding.window.physicalSizeTestValue = const Size(2048, 1536);
-      addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+      tester.view.physicalSize = const Size(2048, 1536);
+      addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(createApp());
 

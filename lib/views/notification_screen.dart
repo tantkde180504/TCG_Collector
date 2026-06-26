@@ -117,7 +117,7 @@ class NotificationScreen extends StatelessWidget {
                               color: item.isRead ? const Color(0xFF1E1E1E) : const Color(0xFF262626),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: item.isRead ? Colors.white.withOpacity(0.05) : notifColor.withOpacity(0.3),
+                                color: item.isRead ? Colors.white.withValues(alpha: 0.05) : notifColor.withValues(alpha: 0.3),
                                 width: 1,
                               ),
                             ),
@@ -128,7 +128,7 @@ class NotificationScreen extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: notifColor.withOpacity(0.15),
+                                    color: notifColor.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(_getIcon(item.type), color: notifColor, size: 20),

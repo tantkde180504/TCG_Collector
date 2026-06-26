@@ -45,12 +45,12 @@ class GlowingBorder extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
-            color: glowColor.withOpacity(0.4),
+            color: glowColor.withValues(alpha: 0.4),
             blurRadius: 10.0,
             spreadRadius: 2.0,
           ),
           BoxShadow(
-            color: glowColor.withOpacity(0.2),
+            color: glowColor.withValues(alpha: 0.2),
             blurRadius: 20.0,
             spreadRadius: 4.0,
           ),
@@ -62,7 +62,7 @@ class GlowingBorder extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
-              color: glowColor.withOpacity(0.8),
+              color: glowColor.withValues(alpha: 0.8),
               width: borderWidth,
             ),
           ),

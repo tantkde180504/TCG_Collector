@@ -9,7 +9,7 @@ import 'cart_screen.dart';
 import 'map_screen.dart';
 import 'chat_screen.dart';
 import 'notification_screen.dart';
-import 'login_screen.dart';
+import 'account_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const ChatScreen(),
     const CartScreen(),
     const NotificationScreen(),
+    const AccountScreen(),
   ];
 
   @override
@@ -62,7 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? 'AI Support'
                           : _currentIndex == 3
                               ? 'My Cart'
-                              : 'Notifications',
+                              : _currentIndex == 4
+                                  ? 'Notifications'
+                                  : 'Account',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
@@ -71,18 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        actions: [
-          // Quick logout button
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white70),
-            onPressed: () {
-              context.read<AuthViewModel>().logout();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
-            },
-          ),
-        ],
+        actions: const [],
       ),
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -176,6 +168,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             label: 'Alerts',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
+            activeIcon: Icon(Icons.person_rounded),
+            label: 'Account',
           ),
         ],
       ),

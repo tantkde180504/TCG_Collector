@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/auth_viewmodel.dart';
-import 'home_screen.dart';
+import 'email_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -31,23 +31,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _handleRegister() async {
     if (_formKey.currentState!.validate()) {
       final authVM = context.read<AuthViewModel>();
-      final success = await authVM.register(
+      final result = await authVM.register(
         _emailController.text,
         _passwordController.text,
         _nameController.text,
       );
 
       if (mounted) {
-        if (success) {
-          // Gửi thông báo thành công
+        if (result == RegisterResult.emailVerificationSent) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Registration successful! Welcome to the Pokémon World.'),
-              backgroundColor: Colors.green,
+              content: Text('📧 Verification email sent! Please check your inbox.'),
+              backgroundColor: Colors.blueAccent,
+              duration: Duration(seconds: 3),
             ),
           );
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(
+              builder: (context) => EmailVerificationScreen(
+                email: _emailController.text,
+                password: _passwordController.text,
+              ),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -95,7 +100,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.amber.withOpacity(0.4),
+                            color: Colors.amber.withValues(alpha: 0.4),
                             blurRadius: 15,
                             spreadRadius: 3,
                           )
@@ -137,7 +142,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

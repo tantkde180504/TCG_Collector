@@ -6,8 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/database_service.dart';
+import '../services/user_service.dart';
 
 enum LoginResult { success, verificationRequired, failed }
+enum RegisterResult { success, emailVerificationSent, failed }
 
 class AuthViewModel extends ChangeNotifier {
   User? _user;
@@ -82,7 +84,7 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String email, String password, String name) async {
+  Future<RegisterResult> register(String email, String password, String name) async {
     _isLoading = true;
     notifyListeners();
 
@@ -91,31 +93,75 @@ class AuthViewModel extends ChangeNotifier {
       try {
         final userCred = await auth.createUserWithEmailAndPassword(email: email, password: password);
         await userCred.user?.updateDisplayName(name);
-        
-        final currentUser = auth.currentUser;
-        if (currentUser != null) {
-          // Sync data to Firestore on register
-          await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
-          
-          // Trust device automatically upon registration
+
+        // Gửi email xác thực — bắt buộc xác nhận trước khi vào app
+        await userCred.user?.sendEmailVerification();
+        debugPrint('Verification email sent to $email');
+
+        // Đăng xuất ngay để buộc người dùng phải xác thực email trước khi đăng nhập
+        await auth.signOut();
+
+        _isLoading = false;
+        notifyListeners();
+        return RegisterResult.emailVerificationSent;
+      } catch (e) {
+        debugPrint('Register error: $e');
+        _isLoading = false;
+        notifyListeners();
+        return RegisterResult.failed;
+      }
+    } else {
+      // Mock for testing — giả lập gửi email xác thực
+      await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint('Mock: Verification email sent to $email');
+
+      _isLoading = false;
+      notifyListeners();
+      return RegisterResult.emailVerificationSent;
+    }
+  }
+
+  /// Kiểm tra người dùng đã xác thực email chưa (sau khi click link trong email)
+  Future<bool> checkEmailVerified(String email, String password) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final auth = _auth;
+    if (auth != null) {
+      try {
+        // Đăng nhập lại để lấy trạng thái mới nhất từ Firebase
+        final userCred = await auth.signInWithEmailAndPassword(email: email, password: password);
+        await userCred.user?.reload();
+        final freshUser = auth.currentUser;
+
+        if (freshUser != null && freshUser.emailVerified) {
+          // Email đã được xác thực — trust thiết bị và sync dữ liệu
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('device_verified_$email', true);
           _isDeviceVerified = true;
+          await DatabaseService.instance.syncFromCloudOnLogin(freshUser.uid);
+
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } else {
+          // Email chưa được xác thực — đăng xuất lại
+          await auth.signOut();
+          _isLoading = false;
+          notifyListeners();
+          return false;
         }
-        _isLoading = false;
-        notifyListeners();
-        return true;
       } catch (e) {
-        debugPrint('Register error: $e');
+        debugPrint('Check email verified error: $e');
         _isLoading = false;
         notifyListeners();
         return false;
       }
     } else {
-      // Mock for testing
+      // Mock: luôn xem như đã xác thực sau 1s
       await Future.delayed(const Duration(milliseconds: 500));
       _mockAuthenticated = true;
-      _mockDisplayName = name;
+      _mockDisplayName = email.split('@')[0];
       _mockEmail = email;
 
       final prefs = await SharedPreferences.getInstance();
@@ -125,6 +171,38 @@ class AuthViewModel extends ChangeNotifier {
       await prefs.setBool('device_verified_$email', true);
       _isDeviceVerified = true;
 
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    }
+  }
+
+  /// Gửi lại email xác thực (dùng khi người dùng không nhận được email)
+  Future<bool> resendVerificationEmail(String email, String password) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final auth = _auth;
+    if (auth != null) {
+      try {
+        final userCred = await auth.signInWithEmailAndPassword(email: email, password: password);
+        if (userCred.user != null && !userCred.user!.emailVerified) {
+          await userCred.user!.sendEmailVerification();
+          debugPrint('Resent verification email to $email');
+        }
+        await auth.signOut();
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } catch (e) {
+        debugPrint('Resend verification error: $e');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } else {
+      await Future.delayed(const Duration(milliseconds: 300));
+      debugPrint('Mock: Resent verification email to $email');
       _isLoading = false;
       notifyListeners();
       return true;
@@ -387,6 +465,99 @@ class AuthViewModel extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
     return false;
+  }
+
+  /// Cập nhật tên hiển thị trên Firebase Auth + Firestore profile
+  Future<bool> updateDisplayName(String newName) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final auth = _auth;
+    if (auth != null) {
+      try {
+        await auth.currentUser?.updateDisplayName(newName);
+        await auth.currentUser?.reload();
+        _user = auth.currentUser;
+
+        // Đồng bộ lên Firestore
+        if (_user != null) {
+          await UserService.instance.updateUserProfile(_user!.uid, {
+            'display_name': newName,
+            'email': _user!.email ?? '',
+          });
+        }
+
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } catch (e) {
+        debugPrint('AuthViewModel: updateDisplayName error: $e');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } else {
+      // Mock
+      await Future.delayed(const Duration(milliseconds: 300));
+      _mockDisplayName = newName;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('display_name', newName);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    }
+  }
+
+  /// Xóa tài khoản: re-authenticate → xóa Firestore data → xóa Auth account
+  Future<bool> deleteAccount(String password) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final auth = _auth;
+    if (auth != null) {
+      try {
+        final user = auth.currentUser;
+        if (user == null || user.email == null) {
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+
+        // Bước 1: Re-authenticate trước khi xóa
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+
+        // Bước 2: Xóa toàn bộ dữ liệu Firestore
+        await UserService.instance.deleteAllUserData(user.uid);
+
+        // Bước 3: Xóa tài khoản Firebase Auth
+        await user.delete();
+
+        _user = null;
+        _isDeviceVerified = false;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } catch (e) {
+        debugPrint('AuthViewModel: deleteAccount error: $e');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } else {
+      // Mock
+      await Future.delayed(const Duration(milliseconds: 500));
+      _mockAuthenticated = false;
+      _isDeviceVerified = false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    }
   }
 
   Future<void> logout() async {

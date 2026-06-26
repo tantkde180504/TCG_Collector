@@ -4,6 +4,7 @@ import '../models/pokemon_card.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../widgets/price_chart.dart';
 import '../widgets/three_d_card.dart';
+import '../services/tcg_price_service.dart';
 
 class DetailScreen extends StatefulWidget {
   final PokemonCard card;
@@ -16,6 +17,33 @@ class DetailScreen extends StatefulWidget {
 
 class _DetailScreenState extends State<DetailScreen> {
   int _quantity = 1;
+  PriceData? _priceData;
+  bool _isPriceLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLivePrice();
+  }
+
+  Future<void> _fetchLivePrice() async {
+    if (widget.card.imageUrl.isEmpty) return;
+    setState(() => _isPriceLoading = true);
+    try {
+      final data = await TcgPriceService.instance.getAndUpdatePriceData(
+        widget.card.imageUrl,
+        fallbackPriceHistory: widget.card.priceHistory,
+      );
+      if (mounted) {
+        setState(() {
+          _priceData = data;
+          _isPriceLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isPriceLoading = false);
+    }
+  }
 
   Color _getTypeColor() {
     switch (widget.card.type.toLowerCase()) {
@@ -55,7 +83,7 @@ class _DetailScreenState extends State<DetailScreen> {
               height: 140,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.2), width: 2),
+                border: Border.all(color: Colors.lightBlueAccent.withValues(alpha: 0.2), width: 2),
               ),
             ),
             Container(
@@ -63,7 +91,7 @@ class _DetailScreenState extends State<DetailScreen> {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.amber.withOpacity(0.3), width: 1.5),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 1.5),
               ),
             ),
             // PokeBall Outer Circle
@@ -75,7 +103,7 @@ class _DetailScreenState extends State<DetailScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.4),
+                    color: Colors.amber.withValues(alpha: 0.4),
                     blurRadius: 10,
                   )
                 ],
@@ -180,7 +208,7 @@ class _DetailScreenState extends State<DetailScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [typeColor.withOpacity(0.8), Colors.black],
+                  colors: [typeColor.withValues(alpha: 0.8), Colors.black],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -201,7 +229,7 @@ class _DetailScreenState extends State<DetailScreen> {
                       ),
                     ],
                   ),
-                  Icon(Icons.style, color: Colors.amber.withOpacity(0.8), size: 100),
+                  Icon(Icons.style, color: Colors.amber.withValues(alpha: 0.8), size: 100),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -241,6 +269,25 @@ class _DetailScreenState extends State<DetailScreen> {
         backgroundColor: const Color(0xFF1E1E1E),
         title: Text(widget.card.name, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh price',
+            icon: _isPriceLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        color: Colors.amber, strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded, color: Colors.white70),
+            onPressed: _isPriceLoading
+                ? null
+                : () {
+                    TcgPriceService.instance.clearCache();
+                    _fetchLivePrice();
+                  },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -272,7 +319,7 @@ class _DetailScreenState extends State<DetailScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1E1E),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +334,7 @@ class _DetailScreenState extends State<DetailScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: cardColor.withOpacity(0.2),
+                            color: cardColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: cardColor, width: 1),
                           ),
@@ -351,7 +398,7 @@ class _DetailScreenState extends State<DetailScreen> {
                     // Description
                     Text(
                       widget.card.description,
-                      style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13, height: 1.4),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13, height: 1.4),
                     ),
                   ],
                 ),
@@ -365,6 +412,8 @@ class _DetailScreenState extends State<DetailScreen> {
               child: PriceChart(
                 prices: widget.card.priceHistory,
                 pokemonType: widget.card.type,
+                priceData: _priceData,
+                isLoading: _isPriceLoading,
               ),
             ),
             const SizedBox(height: 120),
@@ -451,7 +500,7 @@ class _DetailScreenState extends State<DetailScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
         ),
         const SizedBox(height: 4),
         Text(
