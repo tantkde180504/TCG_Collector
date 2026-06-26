@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   : _currentIndex == 1
                       ? 'TCG Radar'
                       : _currentIndex == 2
-                          ? 'Trainer Support'
+                          ? 'AI Support'
                           : _currentIndex == 3
                               ? 'My Cart'
                               : 'Notifications',

@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tcg/viewmodels/auth_viewmodel.dart';
 import 'package:tcg/viewmodels/catalog_viewmodel.dart';
 import 'package:tcg/viewmodels/cart_viewmodel.dart';
-import 'package:tcg/viewmodels/chat_viewmodel.dart';
 import 'package:tcg/viewmodels/notification_viewmodel.dart';
 import 'package:tcg/views/login_screen.dart';
 
@@ -20,7 +19,6 @@ void main() {
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => CatalogViewModel()),
         ChangeNotifierProvider(create: (_) => CartViewModel()),
-        ChangeNotifierProvider(create: (_) => ChatViewModel()),
         ChangeNotifierProvider(create: (_) => NotificationViewModel()),
       ],
       child: const MaterialApp(

@@ -1,7 +1,7 @@
 class ChatMessage {
   final String id;
   final String senderId; // 'user' or 'support'
-  final String senderName; // 'Trainer Red' or 'Professor Oak'
+  final String senderName;
   final String text;
   final DateTime timestamp;
 
@@ -27,7 +27,7 @@ class ChatMessage {
     return ChatMessage(
       id: map['message_id'] ?? '',
       senderId: map['sender_id'] ?? 'user',
-      senderName: map['sender_name'] ?? 'Trainer Red',
+      senderName: map['sender_name'] ?? 'Trainer',
       text: map['text'] ?? '',
       timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
     );
