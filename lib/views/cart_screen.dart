@@ -30,6 +30,13 @@ class _CartScreenState extends State<CartScreen> {
     });
   }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cartVM = context.read<CartViewModel>();
+      final catalogVM = context.read<CatalogViewModel>();
+
+      cartVM.loadCart(catalogVM.cards);
+    });
+  }
   @override
   void dispose() {
     _couponController.dispose();

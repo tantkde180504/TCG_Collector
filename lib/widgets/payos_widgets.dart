@@ -24,9 +24,9 @@ class PayOSPaymentInfo extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.1),
+        color: Colors.amber.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -31,6 +29,7 @@ class DatabaseService {
   bool get _useFallback =>
       _forceFallback ||
       kIsWeb ||
+      (!kIsWeb && (!Platform.isAndroid && !Platform.isIOS)) ||
       (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.windows ||
               defaultTargetPlatform == TargetPlatform.macOS ||

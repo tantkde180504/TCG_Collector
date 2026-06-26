@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/order_item.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/cart_viewmodel.dart';
@@ -395,9 +394,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
@@ -417,9 +416,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.1),
+              color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
@@ -585,7 +584,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.amber.withOpacity(0.15) : const Color(0xFF1E1E1E),
+            color: isSelected ? Colors.amber.withValues(alpha: 0.15) : const Color(0xFF1E1E1E),
             border: Border.all(
               color: isSelected ? Colors.amber : Colors.white12,
               width: 1.5,
