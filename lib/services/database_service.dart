@@ -5,7 +5,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'mock_catalog.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
@@ -262,31 +261,58 @@ class DatabaseService {
   }
 
   // --- CARDS CATALOG ---
-  Future<void> initializeFirestoreCatalog() async {
-    if (!_isFirebaseInitialized) return;
-    try {
-      final collection = FirebaseFirestore.instance.collection('cards');
-      final snapshot = await collection.limit(1).get();
-      if (snapshot.docs.isEmpty) {
-        final defaultCards = MockCatalog.getCards();
+  Future<void> cacheCards(List<PokemonCard> cards) async {
+    if (cards.isEmpty) return;
+
+    // Save to SQLite
+    final db = await database;
+    if (db != null) {
+      final batch = db.batch();
+      for (var card in cards) {
+        batch.insert('cards', card.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit();
+    } else {
+      for (var card in cards) {
+        _fallbackCards.removeWhere((c) => c.id == card.id);
+        _fallbackCards.add(card);
+      }
+    }
+
+    // Save to Firestore for persistence
+    if (_isFirebaseInitialized && await _hasInternet()) {
+      try {
+        final collection = FirebaseFirestore.instance.collection('cards');
         final batch = FirebaseFirestore.instance.batch();
-        for (var card in defaultCards) {
+        for (var card in cards) {
           final docRef = collection.doc(card.id);
-          batch.set(docRef, card.toMap());
+          batch.set(docRef, card.toMap(), SetOptions(merge: true));
         }
         await batch.commit();
-        debugPrint('Successfully seeded Firestore catalog with mock cards.');
+      } catch (e) {
+        debugPrint('Failed to cache cards to Firestore: $e');
       }
-    } catch (e) {
-      debugPrint('Failed to seed Firestore catalog: $e');
     }
   }
 
   Future<List<PokemonCard>> getCards() async {
-    // 1. Tự động tải danh sách thẻ bài lên Firestore nếu db trống
-    await initializeFirestoreCatalog();
+    // Return local fallback immediately if needed
+    if (_useFallback) return _fallbackCards;
 
-    // 2. Lấy dữ liệu sản phẩm từ Firestore nếu có mạng làm nguồn tin cậy
+    // 1. Try to read from fast local SQLite
+    final db = await database;
+    if (db != null) {
+      try {
+        final List<Map<String, dynamic>> maps = await db.query('cards');
+        if (maps.isNotEmpty) {
+          return List.generate(maps.length, (i) => PokemonCard.fromMap(maps[i]));
+        }
+      } catch (e) {
+        debugPrint('Failed to query SQLite cards: $e');
+      }
+    }
+
+    // 2. Fallback to Firestore if local SQLite is empty
     if (_isFirebaseInitialized && await _hasInternet()) {
       try {
         final snapshot = await FirebaseFirestore.instance.collection('cards').get();
@@ -294,46 +320,15 @@ class DatabaseService {
             .map((doc) => PokemonCard.fromMap(doc.data()))
             .toList();
 
-        // Lưu cache cục bộ xuống SQLite để hỗ trợ offline
-        final db = await database;
-        if (db != null) {
-          final batch = db.batch();
-          for (var card in firestoreCards) {
-            batch.insert('cards', card.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-          }
-          await batch.commit();
-        } else {
-          _fallbackCards = firestoreCards;
-        }
+        // Update local memory fallback
+        _fallbackCards = firestoreCards;
         return firestoreCards;
       } catch (e) {
-        debugPrint('Failed to fetch cards from Firestore: $e. Falling back to local/mock.');
+        debugPrint('Failed to fetch cards from Firestore: $e');
       }
     }
 
-    // 3. Dự phòng: lấy từ SQLite cục bộ hoặc mock catalog
-    final db = await database;
-    if (_useFallback || db == null) {
-      if (_fallbackCards.isEmpty) {
-        _fallbackCards = MockCatalog.getCards();
-      }
-      return _fallbackCards;
-    }
-
-    try {
-      final List<Map<String, dynamic>> maps = await db.query('cards');
-      if (maps.isEmpty) {
-        final defaultCards = MockCatalog.getCards();
-        for (var card in defaultCards) {
-          await db.insert('cards', card.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-        }
-        return defaultCards;
-      }
-      return List.generate(maps.length, (i) => PokemonCard.fromMap(maps[i]));
-    } catch (e) {
-      debugPrint('Failed to query SQLite cards: $e. Falling back to MockCatalog.');
-      return MockCatalog.getCards();
-    }
+    return _fallbackCards;
   }
 
   // --- CART OPERATIONS ---

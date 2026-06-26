@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/pokemon_card.dart';
 import '../services/database_service.dart';
+import '../services/tcg_api_service.dart';
 
 class CatalogViewModel extends ChangeNotifier {
   final DatabaseService _db = DatabaseService.instance;
@@ -12,6 +14,8 @@ class CatalogViewModel extends ChangeNotifier {
   String _searchQuery = '';
   String _selectedType = 'All'; // All, Fire, Water, Grass, Lightning, Psychic, Dark, Colorless
   String _sortBy = 'Name'; // Name, PriceAsc, PriceDesc, HP
+
+  Timer? _debounce;
 
   List<PokemonCard> get cards => _filteredCards;
   bool get isLoading => _isLoading;
@@ -28,7 +32,24 @@ class CatalogViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _allCards = await _db.getCards();
+      List<PokemonCard> fetched = [];
+      if (_searchQuery.isEmpty) {
+        // Fetch popular cards from a cool set (e.g., Pokémon 151)
+        fetched = await TcgApiService.instance.fetchCards(query: 'set.id:sv3pt5', pageSize: 40);
+      } else {
+        // Dynamic search by name
+        fetched = await TcgApiService.instance.fetchCards(query: 'name:"*$_searchQuery*"', pageSize: 40);
+      }
+      
+      if (fetched.isNotEmpty) {
+        _allCards = fetched;
+        // Save them to local database to ensure cart and offline capabilities work
+        await _db.cacheCards(_allCards);
+      } else if (_allCards.isEmpty) {
+        // Fallback to cached cards if offline and we have no cards currently
+        _allCards = await _db.getCards();
+      }
+
       _applyFilterAndSort();
     } catch (e) {
       debugPrint('Error loading cards: $e');
@@ -40,6 +61,11 @@ class CatalogViewModel extends ChangeNotifier {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+      loadCatalog();
+    });
+    // Optional: apply local filter immediately while waiting for API
     _applyFilterAndSort();
     notifyListeners();
   }
@@ -59,22 +85,12 @@ class CatalogViewModel extends ChangeNotifier {
   void _applyFilterAndSort() {
     List<PokemonCard> temp = List.from(_allCards);
 
-    // 1. Filter by search query
-    if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      temp = temp.where((card) => 
-        card.name.toLowerCase().contains(query) || 
-        card.attackName.toLowerCase().contains(query) ||
-        card.description.toLowerCase().contains(query)
-      ).toList();
-    }
-
-    // 2. Filter by card system type
+    // Filter by card system type
     if (_selectedType != 'All') {
       temp = temp.where((card) => card.type.toLowerCase() == _selectedType.toLowerCase()).toList();
     }
 
-    // 3. Sorting logic
+    // Sorting logic
     switch (_sortBy) {
       case 'PriceAsc':
         temp.sort((a, b) => a.marketPrice.compareTo(b.marketPrice));

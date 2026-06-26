@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../services/user_service.dart';
 import 'login_screen.dart';
+import 'order_history_screen.dart';
 
 // ── Shared pref keys ──────────────────────────────────────────────────────────
 const _kNotifications = 'settings_notifications';
@@ -87,6 +88,22 @@ class AccountScreen extends StatelessWidget {
                       label: 'Help Center',
                       subtitle: 'FAQs and support articles',
                       onTap: () => _showHelpCenter(context),
+                    ),
+                  ]),
+                  // ── SHOPPING ──────────────────────────────────────────────
+                  _SectionHeader(label: 'Shopping'),
+                  _SettingsGroup(items: [
+                    _SettingsTile(
+                      icon: Icons.receipt_long_rounded,
+                      iconColor: const Color(0xFF00C896),
+                      label: 'Order History',
+                      subtitle: 'View your recent purchases',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const OrderHistoryScreen()),
+                        );
+                      },
                     ),
                   ]),
                   const SizedBox(height: 20),
