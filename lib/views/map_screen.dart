@@ -47,38 +47,38 @@ class ShopLocation {
 final List<ShopLocation> _defaultShops = [
   ShopLocation(
     id: 'shop-1',
-    name: 'Kanto Pokémon Center HCMC',
-    address: 'Tầng 3, 45 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
-    phone: '(028) 3822-2200',
+    name: 'Kawaii Kulture',
+    address: '21 Đầm Rong 1, Thuận Phước, Hải Châu, Đà Nẵng',
+    phone: '0898 222 123',
     isOpen: true,
-    latLng: const LatLng(10.7769, 106.7009),
-    hours: '09:00 – 22:00',
+    latLng: const LatLng(16.0838, 108.2161),
+    hours: '09:00 – 21:00',
   ),
   ShopLocation(
     id: 'shop-2',
-    name: 'Vermilion Deck Vault Hà Nội',
-    address: '12 Cầu Giấy, Quan Hoa, Cầu Giấy, Hà Nội',
-    phone: '(024) 7300-6000',
+    name: 'Totatoys Tcg - Pokemon Đà Nẵng',
+    address: 'Thanh Khê, Đà Nẵng',
+    phone: '0905 111 222',
     isOpen: true,
-    latLng: const LatLng(21.0285, 105.8542),
+    latLng: const LatLng(16.0664, 108.2012),
     hours: '10:00 – 21:30',
   ),
   ShopLocation(
     id: 'shop-3',
-    name: 'Pallet Town TCG Boutique',
-    address: 'Shop B2, 98 Trần Hưng Đạo, Phạm Ngũ Lão, Quận 1, HCMC',
-    phone: '(028) 3911-3000',
+    name: 'FD Card Shop',
+    address: '391/38 Sư Vạn Hạnh, Phường 12, Quận 10, TP.HCM',
+    phone: '0909 333 444',
     isOpen: false,
-    latLng: const LatLng(10.7694, 106.6905),
+    latLng: const LatLng(10.7758, 106.6675),
     hours: '10:00 – 20:00 (Đóng hôm nay)',
   ),
   ShopLocation(
     id: 'shop-4',
-    name: 'Magikarp Card Shop Đà Nẵng',
-    address: '55 Nguyễn Văn Linh, Hải Châu, Đà Nẵng',
-    phone: '(0236) 3822-100',
+    name: 'GG Store Hà Nội',
+    address: '15 Bùi Ngọc Dương, Bạch Mai, Hai Bà Trưng, Hà Nội',
+    phone: '0988 555 666',
     isOpen: true,
-    latLng: const LatLng(16.0544, 108.2022),
+    latLng: const LatLng(21.0028, 105.8523),
     hours: '09:00 – 21:00',
   ),
 ];
@@ -451,6 +451,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   point: shop.latLng,
                   width: isSelected ? 48 : 36,
                   height: isSelected ? 56 : 44,
+                  alignment: Alignment.bottomCenter,
                   child: GestureDetector(
                     onTap: () => _selectShop(shop),
                     child: _buildShopMarker(shop, isSelected),
@@ -542,51 +543,67 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return AnimatedBuilder(
       animation: _pulseAnim,
       builder: (_, child) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Pulse ring for selected
-            if (isSelected)
-              Container(
-                width: 48 * (0.85 + 0.15 * _pulseAnim.value),
-                height: 48 * (0.85 + 0.15 * _pulseAnim.value),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.amber
-                      .withValues(alpha: 0.3 * (1 - _pulseAnim.value)),
+        return SizedBox(
+          width: isSelected ? 48 : 36,
+          height: isSelected ? 56 : 44,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Pulse ring for selected
+              if (isSelected)
+                Positioned(
+                  top: 8,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      width: 48 * (0.85 + 0.15 * _pulseAnim.value),
+                      height: 48 * (0.85 + 0.15 * _pulseAnim.value),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.amber
+                            .withValues(alpha: 0.3 * (1 - _pulseAnim.value)),
+                      ),
+                    ),
+                  ),
+                ),
+              // Pin icon
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: isSelected ? 32 : 26,
+                      height: isSelected ? 32 : 26,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color,
+                        boxShadow: [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.6),
+                            blurRadius: isSelected ? 12 : 6,
+                            spreadRadius: isSelected ? 2 : 0,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.storefront,
+                        color: isSelected ? Colors.black : Colors.white,
+                        size: isSelected ? 18 : 14,
+                      ),
+                    ),
+                    CustomPaint(
+                      size: Size(isSelected ? 10 : 8, isSelected ? 8 : 6),
+                      painter: TrianglePainter(color),
+                    ),
+                  ],
                 ),
               ),
-            // Pin icon
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: isSelected ? 32 : 26,
-                  height: isSelected ? 32 : 26,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color,
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.6),
-                        blurRadius: isSelected ? 12 : 6,
-                        spreadRadius: isSelected ? 2 : 0,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.storefront,
-                    color: isSelected ? Colors.black : Colors.white,
-                    size: isSelected ? 18 : 14,
-                  ),
-                ),
-                CustomPaint(
-                  size: Size(isSelected ? 10 : 8, isSelected ? 8 : 6),
-                  painter: TrianglePainter(color),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
