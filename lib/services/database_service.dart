@@ -589,4 +589,35 @@ class DatabaseService {
       _fallbackMessages.add(_welcomeMessage().toMap());
     }
   }
+
+  // --- ADMIN TOOLS ---
+  Future<List<OrderItem>> getAllOrdersAdmin(List<PokemonCard> catalog) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return [];
+    try {
+      // Vì orders nằm trong subcollection của users, ta dùng collectionGroup
+      final snapshot = await FirebaseFirestore.instance.collectionGroup('orders').get();
+      return snapshot.docs.map((doc) => OrderItem.fromMap(doc.data(), catalog)).toList();
+    } catch (e) {
+      debugPrint('Admin: Failed to fetch all orders: $e');
+      return [];
+    }
+  }
+
+  Future<bool> deleteCard(String cardId) async {
+    final db = await database;
+    if (db != null) {
+      await db.delete('cards', where: 'card_id = ?', whereArgs: [cardId]);
+    }
+    _fallbackCards.removeWhere((c) => c.id == cardId);
+
+    if (_isFirebaseInitialized && await _hasInternet()) {
+      try {
+        await FirebaseFirestore.instance.collection('cards').doc(cardId).delete();
+        return true;
+      } catch (e) {
+        debugPrint('Admin: Failed to delete card from Firestore: $e');
+      }
+    }
+    return true;
+  }
 }

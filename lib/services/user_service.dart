@@ -219,6 +219,22 @@ class UserService {
     }
   }
 
+  /// Lấy toàn bộ danh sách người dùng (Admin only)
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return [];
+    try {
+      final snapshot = await _db.collection('users').get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['uid'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      debugPrint('UserService: getAllUsers error: $e');
+      return [];
+    }
+  }
+
   Future<void> _clearDefaultFlag(String userId) async {
     try {
       final snap = await _db

@@ -15,6 +15,7 @@ class AuthViewModel extends ChangeNotifier {
   User? _user;
   bool _isLoading = false;
   bool _isDeviceVerified = false;
+  bool _isAdmin = false;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Mock fallbacks cho môi trường kiểm thử (Testing) khi chưa khởi tạo Firebase
@@ -31,7 +32,8 @@ class AuthViewModel extends ChangeNotifier {
     return null;
   }
 
-  bool get isAuthenticated => _auth != null ? (_user != null && _isDeviceVerified) : _mockAuthenticated;
+  bool get isAuthenticated => _isAdmin || (_auth != null ? (_user != null && _isDeviceVerified) : _mockAuthenticated);
+  bool get isAdmin => _isAdmin;
   
   String get displayName {
     if (_auth != null) {
@@ -212,6 +214,14 @@ class AuthViewModel extends ChangeNotifier {
   Future<LoginResult> login(String email, String password) async {
     _isLoading = true;
     notifyListeners();
+
+    // Tài khoản Admin cố định
+    if (email == 'admin123' && password == 'admin123') {
+      _isAdmin = true;
+      _isLoading = false;
+      notifyListeners();
+      return LoginResult.success;
+    }
 
     final auth = _auth;
     final prefs = await SharedPreferences.getInstance();
@@ -561,6 +571,7 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _isAdmin = false;
     final auth = _auth;
     if (auth != null) {
       await auth.signOut();

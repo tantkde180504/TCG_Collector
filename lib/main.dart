@@ -9,6 +9,7 @@ import 'viewmodels/chat_viewmodel.dart';
 import 'viewmodels/notification_viewmodel.dart';
 import 'views/login_screen.dart';
 import 'views/home_screen.dart';
+import 'views/admin/admin_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +108,10 @@ class AuthGate extends StatelessWidget {
           child: CircularProgressIndicator(color: Colors.amber),
         ),
       );
+    }
+    
+    if (authVM.isAdmin) {
+      return const AdminDashboardScreen();
     }
     
     return authVM.isAuthenticated ? const HomeScreen() : const LoginScreen();
