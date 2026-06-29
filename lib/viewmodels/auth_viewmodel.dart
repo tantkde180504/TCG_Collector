@@ -34,21 +34,21 @@ class AuthViewModel extends ChangeNotifier {
 
   bool get isAuthenticated => _isAdmin || (_auth != null ? (_user != null && _isDeviceVerified) : _mockAuthenticated);
   bool get isAdmin => _isAdmin;
-  
+
   String get displayName {
     if (_auth != null) {
       return _user?.displayName ?? _user?.email?.split('@')[0] ?? 'Trainer Red';
     }
     return _mockDisplayName;
   }
-  
+
   String get email {
     if (_auth != null) {
       return _user?.email ?? 'trainer.red@kanto.com';
     }
     return _mockEmail;
   }
-  
+
   String get photoUrl => _auth != null ? (_user?.photoURL ?? 'https://images.pokemontcg.io/logo.png') : 'https://images.pokemontcg.io/logo.png';
   bool get isLoading => _isLoading;
   String get userId => _auth != null ? (_user?.uid ?? '') : 'mock_user_id';
@@ -60,10 +60,10 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> _checkLoginStatus() async {
     _isLoading = true;
     notifyListeners();
-    
+
     final auth = _auth;
     final prefs = await SharedPreferences.getInstance();
-    
+
     if (auth != null) {
       auth.authStateChanges().listen((User? user) async {
         _user = user;
@@ -96,7 +96,16 @@ class AuthViewModel extends ChangeNotifier {
         final userCred = await auth.createUserWithEmailAndPassword(email: email, password: password);
         await userCred.user?.updateDisplayName(name);
 
-        // Gửi email xác thực — bắt buộc xác nhận trước khi vào app
+        if (userCred.user != null) {
+          await UserService.instance.ensureUserDocument(
+            userId: userCred.user!.uid,
+            email: email,
+            displayName: name,
+            emailVerified: false,
+          );
+        }
+
+        // Gửi email xác thực — bắt buộc xác nhận trước khi đăng nhập
         await userCred.user?.sendEmailVerification();
         debugPrint('Verification email sent to $email');
 
@@ -142,6 +151,13 @@ class AuthViewModel extends ChangeNotifier {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('device_verified_$email', true);
           _isDeviceVerified = true;
+          await UserService.instance.ensureUserDocument(
+            userId: freshUser.uid,
+            email: freshUser.email ?? email,
+            displayName: freshUser.displayName,
+            emailVerified: true,
+            photoUrl: freshUser.photoURL,
+          );
           await DatabaseService.instance.syncFromCloudOnLogin(freshUser.uid);
 
           _isLoading = false;
@@ -217,23 +233,52 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     // Tài khoản Admin cố định
-    if (email == 'admin123' && password == 'admin123') {
-      _isAdmin = true;
-      _isLoading = false;
-      notifyListeners();
-      return LoginResult.success;
-    }
+    // if (email == 'admin123' && password == 'admin123') {
+    //   _isAdmin = true;
+    //   _isLoading = false;
+    //   notifyListeners();
+    //   return LoginResult.success;
+    // }
 
     final auth = _auth;
     final prefs = await SharedPreferences.getInstance();
 
     if (auth != null) {
       try {
-        await auth.signInWithEmailAndPassword(email: email, password: password);
-        
+        final userCred = await auth.signInWithEmailAndPassword(email: email, password: password);
+
+        if (userCred.user != null) {
+          final uid = userCred.user!.uid;
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get();
+
+          final data = doc.data();
+          if (data?['is_disabled'] == true) {
+            await auth.signOut();
+            _isLoading = false;
+            notifyListeners();
+            return LoginResult.failed;
+          }
+
+          final role = data?['role']?.toString();
+          _isAdmin = data?['isAdmin'] == true ||
+              role == 'admin' ||
+              role == 'super_admin';
+
+          await UserService.instance.ensureUserDocument(
+            userId: uid,
+            email: userCred.user!.email ?? email,
+            displayName: userCred.user!.displayName,
+            emailVerified: userCred.user!.emailVerified,
+            photoUrl: userCred.user!.photoURL,
+          );
+        }
+
         // Cập nhật state local
         final isVerified = prefs.getBool('device_verified_$email') ?? false;
-        
+
         if (isVerified) {
           _isDeviceVerified = true;
           final currentUser = auth.currentUser;
@@ -248,14 +293,14 @@ class AuthViewModel extends ChangeNotifier {
           // Device is not verified, require verification
           _isDeviceVerified = false;
           final code = (100000 + Random().nextInt(900000)).toString();
-          
+
           await FirebaseFirestore.instance.collection('verification_codes').doc(email).set({
             'code': code,
             'timestamp': FieldValue.serverTimestamp(),
           });
-          
+
           debugPrint('Generated Verification Code for $email: $code');
-          
+
           _isLoading = false;
           notifyListeners();
           return LoginResult.verificationRequired;
@@ -268,7 +313,7 @@ class AuthViewModel extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 500));
       if (email.contains('@') && password.length >= 6) {
         final isVerified = prefs.getBool('device_verified_$email') ?? false;
-        
+
         if (isVerified) {
           _mockAuthenticated = true;
           _mockDisplayName = email.split('@')[0];
@@ -287,7 +332,7 @@ class AuthViewModel extends ChangeNotifier {
           final code = (100000 + Random().nextInt(900000)).toString();
           await prefs.setString('mock_verification_code_$email', code);
           debugPrint('Mock Verification Code for $email: $code');
-          
+
           _isLoading = false;
           notifyListeners();
           return LoginResult.verificationRequired;
@@ -299,30 +344,30 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
     return LoginResult.failed;
   }
-  
+
   Future<bool> verifyDeviceCode(String email, String password, String code) async {
     _isLoading = true;
     notifyListeners();
-    
+
     final auth = _auth;
     final prefs = await SharedPreferences.getInstance();
-    
+
     if (auth != null) {
       try {
         final doc = await FirebaseFirestore.instance.collection('verification_codes').doc(email).get();
         if (doc.exists && doc.data()!['code'] == code) {
           // Xóa code sau khi dùng
           await doc.reference.delete();
-          
+
           await prefs.setBool('device_verified_$email', true);
           _isDeviceVerified = true;
-          
+
           final currentUser = auth.currentUser;
           if (currentUser != null) {
             _user = currentUser;
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
-          
+
           _isLoading = false;
           notifyListeners();
           return true;
@@ -335,7 +380,7 @@ class AuthViewModel extends ChangeNotifier {
       if (mockCode == code) {
         await prefs.remove('mock_verification_code_$email');
         await prefs.setBool('device_verified_$email', true);
-        
+
         _mockAuthenticated = true;
         _mockDisplayName = email.split('@')[0];
         _mockEmail = email;
@@ -344,13 +389,13 @@ class AuthViewModel extends ChangeNotifier {
         await prefs.setBool('is_authenticated', true);
         await prefs.setString('display_name', _mockDisplayName);
         await prefs.setString('email', _mockEmail);
-        
+
         _isLoading = false;
         notifyListeners();
         return true;
       }
     }
-    
+
     _isLoading = false;
     notifyListeners();
     return false;
@@ -408,10 +453,17 @@ class AuthViewModel extends ChangeNotifier {
 
           final UserCredential userCred = await auth.signInWithCredential(credential);
           final currentUser = userCred.user;
-          
+
           // Google Login is considered automatically verified on new devices
           // due to Google's built-in 2SV (Choose correct number)
           if (currentUser != null) {
+            await UserService.instance.ensureUserDocument(
+              userId: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName,
+              emailVerified: currentUser.emailVerified,
+              photoUrl: currentUser.photoURL,
+            );
             _user = currentUser;
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;
@@ -443,6 +495,13 @@ class AuthViewModel extends ChangeNotifier {
           }
           final currentUser = userCred.user;
           if (currentUser != null) {
+            await UserService.instance.ensureUserDocument(
+              userId: currentUser.uid,
+              email: currentUser.email ?? mockEmail,
+              displayName: currentUser.displayName ?? mockName,
+              emailVerified: currentUser.emailVerified,
+              photoUrl: currentUser.photoURL,
+            );
             _user = currentUser;
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;

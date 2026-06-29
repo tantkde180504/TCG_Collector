@@ -180,9 +180,38 @@ class DatabaseService {
 
     try {
       final db = await database;
+      // Đẩy đơn hàng từ local lên Firebase trước
+      await _syncLocalOrdersToCloud(user, db);
+      // Lấy đơn hàng từ Firebase về local
       await _mergeOrdersFromCloud(user.uid, db);
     } catch (e) {
       debugPrint('Failed to sync orders from cloud: $e');
+    }
+  }
+
+  Future<void> _syncLocalOrdersToCloud(User user, Database? db) async {
+    if (db == null) return;
+    try {
+      final maps = await db.query('orders', where: 'user_id = ?', whereArgs: [user.email ?? '']);
+      final batch = FirebaseFirestore.instance.batch();
+      final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('orders');
+      
+      for (var map in maps) {
+        final String orderId = map['order_id'].toString();
+        final numericId = int.tryParse(orderId.replaceAll(RegExp(r'\D'), '')) ?? DateTime.now().millisecondsSinceEpoch;
+        final cloudMap = Map<String, dynamic>.from(map);
+        cloudMap['orderCode'] = numericId;
+        // Bỏ qua sync_timestamp bằng serverTimestamp ở batch để tối ưu tốc độ hoặc để client tự resolve
+        
+        batch.set(collection.doc(orderId), cloudMap, SetOptions(merge: true));
+      }
+      
+      if (maps.isNotEmpty) {
+        await batch.commit();
+        debugPrint('Synced ${maps.length} local orders to Firebase.');
+      }
+    } catch (e) {
+      debugPrint('Failed to sync local orders to cloud: $e');
     }
   }
 
@@ -237,6 +266,7 @@ class DatabaseService {
           }
         }
       },
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -255,7 +285,8 @@ class DatabaseService {
         attack_name TEXT,
         attack_damage INTEGER,
         weakness TEXT,
-        retreat_cost INTEGER
+        retreat_cost INTEGER,
+        stock_quantity INTEGER DEFAULT 0
       )
     ''');
 
@@ -292,6 +323,12 @@ class DatabaseService {
     ''');
   }
 
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 0');
+    }
+  }
+
   // --- CARDS CATALOG ---
   Future<void> cacheCards(List<PokemonCard> cards) async {
     if (cards.isEmpty) return;
@@ -318,7 +355,10 @@ class DatabaseService {
         final batch = FirebaseFirestore.instance.batch();
         for (var card in cards) {
           final docRef = collection.doc(card.id);
-          batch.set(docRef, card.toMap(), SetOptions(merge: true));
+          final map = card.toMap();
+          // Loại bỏ trường stock_quantity để không đè lên số lượng mà Admin đã set trên Firebase
+          map.remove('stock_quantity');
+          batch.set(docRef, map, SetOptions(merge: true));
         }
         await batch.commit();
       } catch (e) {

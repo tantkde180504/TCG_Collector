@@ -1924,6 +1924,17 @@ class _AddressTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+            if (address.fullName.isNotEmpty || address.phoneNumber.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  [if (address.fullName.isNotEmpty) address.fullName, if (address.phoneNumber.isNotEmpty) address.phoneNumber].join(' - '),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
             Text(
               address.street,
               style: TextStyle(
@@ -1982,6 +1993,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
   late final TextEditingController _streetCtrl;
   late final TextEditingController _cityCtrl;
   late final TextEditingController _countryCtrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _phoneCtrl;
   String _label = 'Home';
   bool _isDefault = false;
   bool _saving = false;
@@ -1994,6 +2007,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     _cityCtrl = TextEditingController(text: e?.city ?? '');
     _countryCtrl =
         TextEditingController(text: e?.country ?? 'Vietnam');
+    _nameCtrl = TextEditingController(text: e?.fullName ?? '');
+    _phoneCtrl = TextEditingController(text: e?.phoneNumber ?? '');
     _label = e?.label ?? 'Home';
     _isDefault = e?.isDefault ?? false;
   }
@@ -2003,6 +2018,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     _streetCtrl.dispose();
     _cityCtrl.dispose();
     _countryCtrl.dispose();
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -2013,6 +2030,8 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
     final address = UserAddress(
       id: widget.editing?.id ?? '',
       label: _label,
+      fullName: _nameCtrl.text.trim(),
+      phoneNumber: _phoneCtrl.text.trim(),
       street: _streetCtrl.text.trim(),
       city: _cityCtrl.text.trim(),
       country: _countryCtrl.text.trim(),
@@ -2161,6 +2180,32 @@ class _AddressFormSheetState extends State<_AddressFormSheet> {
                       .toList(),
                 ),
                 const SizedBox(height: 16),
+
+                // Name & Phone
+                TextFormField(
+                  controller: _nameCtrl,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 13),
+                  decoration: _inputDecoration(
+                      'Full Name', Icons.person_rounded),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Required'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                
+                TextFormField(
+                  controller: _phoneCtrl,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 13),
+                  keyboardType: TextInputType.phone,
+                  decoration: _inputDecoration(
+                      'Phone Number', Icons.phone_rounded),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Required'
+                      : null,
+                ),
+                const SizedBox(height: 12),
 
                 // Street
                 TextFormField(

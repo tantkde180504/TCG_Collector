@@ -2,11 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
 import '../services/database_service.dart';
 import '../services/payos_service.dart';
+import '../services/local_notification_service.dart';
 
 class CartViewModel extends ChangeNotifier {
   final DatabaseService _db = DatabaseService.instance;
@@ -44,7 +48,7 @@ class CartViewModel extends ChangeNotifier {
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
   double get discountAmount => subtotal * _discountPercent;
-  double get shippingCost => subtotal > 150.0 ? 0.0 : 7.99; // Free shipping above $150
+  double get shippingCost => subtotal > 150.0 ? 0.0 : 0.15; // Free shipping above $150
   double get grandTotal => subtotal - discountAmount + shippingCost;
 
   Future<void> loadCart(List<PokemonCard> catalog) async {
@@ -238,6 +242,11 @@ class CartViewModel extends ChangeNotifier {
         // Reset coupon discount
         _appliedCoupon = '';
         _discountPercent = 0.0;
+
+        LocalNotificationService.showOrderNotification(
+          title: 'Order Successful',
+          body: 'Your order $orderId has been placed successfully!',
+        );
       }
       
       _isLoading = false;
@@ -289,7 +298,7 @@ class CartViewModel extends ChangeNotifier {
         userId: existing.userId,
         items: existing.items,
         totalAmount: existing.totalAmount,
-        status: 'Paid',
+        status: 'Processing',
         timestamp: existing.timestamp,
         shippingAddress: existing.shippingAddress,
         paymentMethod: existing.paymentMethod,
@@ -308,6 +317,11 @@ class CartViewModel extends ChangeNotifier {
         _appliedCoupon = '';
         _discountPercent = 0.0;
       }
+
+      LocalNotificationService.showOrderNotification(
+        title: 'Payment Successful',
+        body: 'Your payment for order $orderId has been verified!',
+      );
 
       _isLoading = false;
       notifyListeners();
@@ -431,6 +445,52 @@ class CartViewModel extends ChangeNotifier {
       }
       
       await refreshUnpaidPayOSOrders(catalog);
+      // 1. Đồng bộ 2 chiều: đẩy các đơn local (nếu có) lên Firebase trước, 
+      // rồi tải đơn từ Firebase về local (làm ngầm thông qua _mergeOrdersFromCloud).
+      await _db.syncOrdersFromCloud();
+
+      bool loadedFromFirebase = false;
+
+      // 2. Tải trực tiếp từ Firebase để hiển thị UI đảm bảo real-time
+      try {
+        if (Firebase.apps.isNotEmpty) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final snapshot = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('orders')
+                .get(); 
+                
+            if (snapshot.docs.isNotEmpty) {
+              final List<OrderItem> cloudOrders = snapshot.docs.map((doc) {
+                final data = doc.data();
+                return OrderItem.fromMap(data, catalog);
+              }).toList();
+              
+              cloudOrders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+              _orders = cloudOrders.where((o) => o.userId == userId).toList();
+              loadedFromFirebase = true;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Lỗi tải trực tiếp từ Firebase: $e');
+      }
+
+      // 3. Fallback đọc từ SQLite nếu Firebase lỗi/không kết nối
+      if (!loadedFromFirebase) {
+        var allOrders = await _db.getOrders(catalog);
+        _orders = allOrders.where((o) => o.userId == userId).toList();
+      }
+
+      // Check trạng thái thanh toán PayOS
+      await refreshUnpaidPayOSOrders(catalog);
+
+      if (!loadedFromFirebase) {
+        var allOrders = await _db.getOrders(catalog);
+        _orders = allOrders.where((o) => o.userId == userId).toList();
+      }
     } catch (e) {
       debugPrint('Error loading orders: $e');
       _isLoading = false;

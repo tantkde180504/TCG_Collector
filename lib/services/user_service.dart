@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
@@ -8,6 +9,8 @@ import 'package:flutter/foundation.dart';
 class UserAddress {
   final String id;
   final String label;
+  final String fullName;
+  final String phoneNumber;
   final String street;
   final String city;
   final String country;
@@ -16,6 +19,8 @@ class UserAddress {
   const UserAddress({
     required this.id,
     required this.label,
+    this.fullName = '',
+    this.phoneNumber = '',
     required this.street,
     required this.city,
     required this.country,
@@ -24,6 +29,8 @@ class UserAddress {
 
   Map<String, dynamic> toMap() => {
         'label': label,
+        'fullName': fullName,
+        'phoneNumber': phoneNumber,
         'street': street,
         'city': city,
         'country': country,
@@ -34,6 +41,8 @@ class UserAddress {
       UserAddress(
         id: id,
         label: map['label'] ?? '',
+        fullName: map['fullName'] ?? '',
+        phoneNumber: map['phoneNumber'] ?? '',
         street: map['street'] ?? '',
         city: map['city'] ?? '',
         country: map['country'] ?? 'Vietnam',
@@ -42,6 +51,8 @@ class UserAddress {
 
   UserAddress copyWith({
     String? label,
+    String? fullName,
+    String? phoneNumber,
     String? street,
     String? city,
     String? country,
@@ -50,6 +61,8 @@ class UserAddress {
       UserAddress(
         id: id,
         label: label ?? this.label,
+        fullName: fullName ?? this.fullName,
+        phoneNumber: phoneNumber ?? this.phoneNumber,
         street: street ?? this.street,
         city: city ?? this.city,
         country: country ?? this.country,
@@ -98,6 +111,80 @@ class UserService {
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
   // ── User Profile ───────────────────────────────────────────────────────────
+
+  Future<void> ensureUserDocument({
+    required String userId,
+    required String email,
+    String? displayName,
+    bool emailVerified = false,
+    String? photoUrl,
+  }) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return;
+    try {
+      final docRef = _db.collection('users').doc(userId);
+      final doc = await docRef.get();
+      if (!doc.exists) {
+        await docRef.set({
+          'email': email,
+          'display_name': displayName ?? email.split('@')[0],
+          'email_verified': emailVerified,
+          'photo_url': photoUrl ?? '',
+          'role': 'customer',
+          'is_disabled': false,
+          'created_at': FieldValue.serverTimestamp(),
+          'last_login_at': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await docRef.update({
+          'last_login_at': FieldValue.serverTimestamp(),
+          if (emailVerified) 'email_verified': true,
+        });
+      }
+    } catch (e) {
+      debugPrint('UserService: ensureUserDocument error: $e');
+    }
+  }
+
+  Future<bool> adminUpdateUser(String uid, Map<String, dynamic> data) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return false;
+    try {
+      await _db.collection('users').doc(uid).update(data);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> adminBulkUpdate(List<String> uids, Map<String, dynamic> data) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return false;
+    try {
+      final batch = _db.batch();
+      for (final uid in uids) {
+        batch.update(_db.collection('users').doc(uid), data);
+      }
+      await batch.commit();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> adminSendPasswordReset(String email) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return false;
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> adminDeleteUser(String uid) async {
+    // Note: Admin delete user from Firebase Auth requires Admin SDK (backend).
+    // From client side, we can only delete the Firestore document or mark as deleted.
+    // For now we'll call deleteAllUserData.
+    return await deleteAllUserData(uid);
+  }
 
   /// Lưu / cập nhật profile user lên Firestore users/{uid}
   Future<bool> updateUserProfile(String userId, Map<String, dynamic> data) async {

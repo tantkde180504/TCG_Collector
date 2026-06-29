@@ -4,7 +4,7 @@ import '../models/pokemon_card.dart';
 class ChatCatalogContext {
   static const shopPolicies = '''
 Shop policies:
-- Standard shipping: 2-4 business days; free express delivery on orders above \$150.00, otherwise \$7.99
+- Standard shipping: 2-4 business days; free express delivery on orders above \$150.00, otherwise \$0.15
 - Coupon codes: "PIKACHU10" (10% off), "CHARIZARD20" (20% off selected products)
 - All cards are 100% authentic with a 3-step verification process
 ''';
