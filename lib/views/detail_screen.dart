@@ -346,9 +346,30 @@ class _DetailScreenState extends State<DetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      widget.card.rarity,
-                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          widget.card.rarity,
+                          style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: widget.card.stockQuantity > 0 ? Colors.green.shade900.withValues(alpha: 0.5) : Colors.red.shade900.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: widget.card.stockQuantity > 0 ? Colors.greenAccent : Colors.redAccent, width: 1),
+                          ),
+                          child: Text(
+                            widget.card.stockQuantity > 0 ? 'In Stock: ${widget.card.stockQuantity}' : 'Out of Stock',
+                            style: TextStyle(
+                              color: widget.card.stockQuantity > 0 ? Colors.greenAccent : Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     const Divider(color: Colors.white24),
