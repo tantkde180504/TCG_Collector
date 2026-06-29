@@ -5,6 +5,7 @@ import '../models/cart_item.dart';
 import '../models/order_item.dart';
 import '../services/database_service.dart';
 import '../services/payos_service.dart';
+import '../services/local_notification_service.dart';
 
 class CartViewModel extends ChangeNotifier {
   final DatabaseService _db = DatabaseService.instance;
@@ -41,7 +42,7 @@ class CartViewModel extends ChangeNotifier {
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
   double get discountAmount => subtotal * _discountPercent;
-  double get shippingCost => subtotal > 150.0 ? 0.0 : 7.99; // Free shipping above $150
+  double get shippingCost => subtotal > 150.0 ? 0.0 : 0.15; // Free shipping above $150
   double get grandTotal => subtotal - discountAmount + shippingCost;
 
   Future<void> loadCart(List<PokemonCard> catalog) async {
@@ -235,6 +236,11 @@ class CartViewModel extends ChangeNotifier {
         // Reset coupon discount
         _appliedCoupon = '';
         _discountPercent = 0.0;
+
+        LocalNotificationService.showOrderNotification(
+          title: 'Order Successful',
+          body: 'Your order $orderId has been placed successfully!',
+        );
       }
       
       _isLoading = false;
@@ -262,6 +268,37 @@ class CartViewModel extends ChangeNotifier {
     try {
       final status = await PayosService.getPaymentStatus(orderCode);
       if (status != 'PAID') {
+      if (status == 'PAID') {
+        // Find order in local cache and update
+        final index = _orders.indexWhere((o) => o.orderId == orderId);
+        if (index >= 0) {
+          final updatedOrder = OrderItem(
+            orderId: _orders[index].orderId,
+            userId: _orders[index].userId,
+            items: _orders[index].items,
+            totalAmount: _orders[index].totalAmount,
+            status: 'Processing',
+            timestamp: _orders[index].timestamp,
+            shippingAddress: _orders[index].shippingAddress,
+            paymentMethod: _orders[index].paymentMethod,
+          );
+          
+          await _db.saveOrder(updatedOrder);
+          _orders[index] = updatedOrder;
+          
+          // Clear cart now that payment is confirmed
+          await clearCart();
+          
+          // Reset coupon discount
+          _appliedCoupon = '';
+          _discountPercent = 0.0;
+
+          LocalNotificationService.showOrderNotification(
+            title: 'Payment Successful',
+            body: 'Your payment for order $orderId has been verified!',
+          );
+        }
+        
         _isLoading = false;
         notifyListeners();
         return false;

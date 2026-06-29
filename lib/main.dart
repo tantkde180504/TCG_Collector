@@ -10,12 +10,14 @@ import 'viewmodels/notification_viewmodel.dart';
 import 'views/login_screen.dart';
 import 'views/home_screen.dart';
 import 'views/admin/admin_dashboard_screen.dart';
+import 'services/local_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await LocalNotificationService.init();
   runApp(const MyApp());
 }
 

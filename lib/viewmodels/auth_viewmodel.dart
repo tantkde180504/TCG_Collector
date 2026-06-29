@@ -137,7 +137,6 @@ class AuthViewModel extends ChangeNotifier {
         final freshUser = auth.currentUser;
 
         if (freshUser != null && freshUser.emailVerified) {
-          _user = freshUser;
           // Email đã được xác thực — trust thiết bị và sync dữ liệu
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('device_verified_$email', true);
@@ -238,7 +237,6 @@ class AuthViewModel extends ChangeNotifier {
           _isDeviceVerified = true;
           final currentUser = auth.currentUser;
           if (currentUser != null) {
-            _user = currentUser;
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
           _isLoading = false;
@@ -319,7 +317,6 @@ class AuthViewModel extends ChangeNotifier {
           
           final currentUser = auth.currentUser;
           if (currentUser != null) {
-            _user = currentUser;
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
           
@@ -413,6 +410,13 @@ class AuthViewModel extends ChangeNotifier {
           // due to Google's built-in 2SV (Choose correct number)
           if (currentUser != null) {
             _user = currentUser;
+            await UserService.instance.ensureUserDocument(
+              userId: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName,
+              emailVerified: currentUser.emailVerified,
+              photoUrl: currentUser.photoURL,
+            );
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
@@ -444,6 +448,13 @@ class AuthViewModel extends ChangeNotifier {
           final currentUser = userCred.user;
           if (currentUser != null) {
             _user = currentUser;
+            await UserService.instance.ensureUserDocument(
+              userId: currentUser.uid,
+              email: currentUser.email ?? mockEmail,
+              displayName: currentUser.displayName ?? mockName,
+              emailVerified: currentUser.emailVerified,
+              photoUrl: currentUser.photoURL,
+            );
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);

@@ -30,7 +30,7 @@ class OakFallbackService {
         text.contains('ship') ||
         text.contains('phí giao')) {
       return 'Giao hàng tiêu chuẩn mất 2-4 ngày làm việc. '
-          'Đơn từ \$150.00 được miễn phí giao express, còn không thì phí \$7.99.';
+          'Đơn từ \$150.00 được miễn phí giao express, còn không thì phí \$0.15.';
     }
 
     if (text.contains('fake') ||
