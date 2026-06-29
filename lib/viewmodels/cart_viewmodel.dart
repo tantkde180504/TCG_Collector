@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'dart:math';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
@@ -402,15 +405,52 @@ class CartViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // 1. Đồng bộ 2 chiều: đẩy các đơn local (nếu có) lên Firebase trước, 
+      // rồi tải đơn từ Firebase về local (làm ngầm thông qua _mergeOrdersFromCloud).
       await _db.syncOrdersFromCloud();
 
-      var allOrders = await _db.getOrders(catalog);
-      _orders = allOrders.where((o) => o.userId == userId).toList();
+      bool loadedFromFirebase = false;
 
+      // 2. Tải trực tiếp từ Firebase để hiển thị UI đảm bảo real-time
+      try {
+        if (Firebase.apps.isNotEmpty) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final snapshot = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('orders')
+                .get(); 
+                
+            if (snapshot.docs.isNotEmpty) {
+              final List<OrderItem> cloudOrders = snapshot.docs.map((doc) {
+                final data = doc.data();
+                return OrderItem.fromMap(data, catalog);
+              }).toList();
+              
+              cloudOrders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+              _orders = cloudOrders.where((o) => o.userId == userId).toList();
+              loadedFromFirebase = true;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Lỗi tải trực tiếp từ Firebase: $e');
+      }
+
+      // 3. Fallback đọc từ SQLite nếu Firebase lỗi/không kết nối
+      if (!loadedFromFirebase) {
+        var allOrders = await _db.getOrders(catalog);
+        _orders = allOrders.where((o) => o.userId == userId).toList();
+      }
+
+      // Check trạng thái thanh toán PayOS
       await refreshUnpaidPayOSOrders(catalog);
 
-      allOrders = await _db.getOrders(catalog);
-      _orders = allOrders.where((o) => o.userId == userId).toList();
+      if (!loadedFromFirebase) {
+        var allOrders = await _db.getOrders(catalog);
+        _orders = allOrders.where((o) => o.userId == userId).toList();
+      }
     } catch (e) {
       debugPrint('Error loading orders: $e');
     }

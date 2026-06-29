@@ -180,9 +180,38 @@ class DatabaseService {
 
     try {
       final db = await database;
+      // Đẩy đơn hàng từ local lên Firebase trước
+      await _syncLocalOrdersToCloud(user, db);
+      // Lấy đơn hàng từ Firebase về local
       await _mergeOrdersFromCloud(user.uid, db);
     } catch (e) {
       debugPrint('Failed to sync orders from cloud: $e');
+    }
+  }
+
+  Future<void> _syncLocalOrdersToCloud(User user, Database? db) async {
+    if (db == null) return;
+    try {
+      final maps = await db.query('orders', where: 'user_id = ?', whereArgs: [user.email ?? '']);
+      final batch = FirebaseFirestore.instance.batch();
+      final collection = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('orders');
+      
+      for (var map in maps) {
+        final String orderId = map['order_id'].toString();
+        final numericId = int.tryParse(orderId.replaceAll(RegExp(r'\D'), '')) ?? DateTime.now().millisecondsSinceEpoch;
+        final cloudMap = Map<String, dynamic>.from(map);
+        cloudMap['orderCode'] = numericId;
+        // Bỏ qua sync_timestamp bằng serverTimestamp ở batch để tối ưu tốc độ hoặc để client tự resolve
+        
+        batch.set(collection.doc(orderId), cloudMap, SetOptions(merge: true));
+      }
+      
+      if (maps.isNotEmpty) {
+        await batch.commit();
+        debugPrint('Synced ${maps.length} local orders to Firebase.');
+      }
+    } catch (e) {
+      debugPrint('Failed to sync local orders to cloud: $e');
     }
   }
 
