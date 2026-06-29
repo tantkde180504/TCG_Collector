@@ -477,7 +477,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
       child: FilterChip(
         label: Text(label),
         selected: selected,
-        selectedColor: Colors.amber.withOpacity(0.25),
+        selectedColor: Colors.amber.withValues(alpha: 0.25),
         checkmarkColor: Colors.amber,
         onSelected: (_) => setState(() {
           _sortOption = option;
@@ -491,9 +491,9 @@ class _UserManagementTabState extends State<UserManagementTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.08),
+        color: Colors.amber.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -560,7 +560,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
           color: const Color(0xFF1E1E1E),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? Colors.amber.withOpacity(0.5) : Colors.white10,
+            color: isSelected ? Colors.amber.withValues(alpha: 0.5) : Colors.white10,
           ),
         ),
         child: ListTile(
@@ -596,7 +596,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
                   margin: const EdgeInsets.only(left: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.2),
+                    color: Colors.red.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text('Banned', style: TextStyle(fontSize: 10, color: Colors.redAccent)),
@@ -673,7 +673,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
       margin: const EdgeInsets.only(left: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.15),
+        color: Colors.amber.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(role.label, style: const TextStyle(fontSize: 10, color: Colors.amber)),
@@ -954,7 +954,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
           backgroundColor: const Color(0xFF1E1E1E),
           title: Text(users.length == 1 ? 'Change Role' : 'Change Role (${users.length} users)'),
           content: DropdownButtonFormField<UserRole>(
-            value: selectedRole,
+            initialValue: selectedRole,
             dropdownColor: const Color(0xFF2A2A2A),
             decoration: const InputDecoration(labelText: 'Role'),
             items: UserRole.values
