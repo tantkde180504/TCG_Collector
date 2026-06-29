@@ -403,94 +403,57 @@ class CartViewModel extends ChangeNotifier {
     return false;
   }
 
+  String? _currentSubscriptionUid;
+
   Future<void> loadOrders(String userId, List<PokemonCard> catalog) async {
-    // Nếu đã đang lắng nghe rồi thì không cần đăng ký lại
-    if (_ordersSubscription != null) return;
+    final firebaseUid = _getFirebaseUid();
+    
+    // Nếu UID thay đổi hoặc chưa có subscription, đăng ký lại
+    if (_ordersSubscription != null && _currentSubscriptionUid == firebaseUid) {
+      // Đã đang lắng nghe đúng user, chỉ cần đảm bảo dữ liệu mới nhất
+      await refreshUnpaidPayOSOrders(catalog);
+      return;
+    }
+
+    // Cancel subscription cũ nếu có
+    await _ordersSubscription?.cancel();
+    _ordersSubscription = null;
+    _currentSubscriptionUid = firebaseUid;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 1. Tải dữ liệu ban đầu từ SQLite/Local
+      // 1. Tải dữ liệu ban đầu từ SQLite/Local để UI hiện lên nhanh
       var allOrders = await _db.getOrders(catalog);
       _orders = allOrders.where((o) => o.userId == userId).toList();
       _isLoading = false;
       notifyListeners();
 
-      // 2. Bắt đầu lắng nghe thay đổi thời gian thực từ Firestore
-      // Giả định: Trong DatabaseService, chúng ta cần dùng UID của Firebase để lắng nghe
-      // Vì loadOrders hiện tại đang nhận userId (email), tôi cần lấy UID từ FirebaseAuth 
-      // Nhưng để đơn giản và nhất quán với DatabaseService hiện tại, 
-      // tôi sẽ giả định DatabaseService tự xử lý việc tìm UID hoặc dùng userId này.
-      // Tuy nhiên, DatabaseService.getOrdersFirestoreStream yêu cầu firebaseUid.
-      
-      // Để chính xác nhất, tôi sẽ lấy UID từ FirebaseAuth ngay tại đây.
-      final firebaseUid = _getFirebaseUid();
+      // 2. Thiết lập lắng nghe thay đổi thời gian thực từ Firestore
       if (firebaseUid != null) {
         _ordersSubscription = _db.getOrdersFirestoreStream(firebaseUid).listen((snapshot) async {
-          debugPrint('Orders Firestore updated: ${snapshot.docs.length} docs');
+          debugPrint('Orders Firestore real-time update: ${snapshot.docs.length} docs');
           
-          // Khi có thay đổi từ Firestore, cập nhật vào local database
+          List<OrderItem> cloudOrders = [];
           for (var doc in snapshot.docs) {
-            final data = doc.data();
-            final order = OrderItem.fromMap(data, catalog);
-            await _db.saveOrder(order);
+            final order = OrderItem.fromMap(doc.data(), catalog);
+            cloudOrders.add(order);
+            // Cập nhật local database ngầm (dùng bản local-only để tránh loop sync)
+            await _db.saveOrderLocal(order);
           }
           
-          // Tải lại danh sách từ local database (đã được cập nhật) để hiển thị lên UI
-          final updatedOrders = await _db.getOrders(catalog);
-          _orders = updatedOrders.where((o) => o.userId == userId).toList();
+          // Cập nhật UI ngay lập tức từ dữ liệu Firestore mới nhất
+          cloudOrders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          _orders = cloudOrders.where((o) => o.userId == userId).toList();
           notifyListeners();
         });
       }
       
-      await refreshUnpaidPayOSOrders(catalog);
-      // 1. Đồng bộ 2 chiều: đẩy các đơn local (nếu có) lên Firebase trước, 
-      // rồi tải đơn từ Firebase về local (làm ngầm thông qua _mergeOrdersFromCloud).
+      // 3. Thực hiện đồng bộ ngầm
       await _db.syncOrdersFromCloud();
-
-      bool loadedFromFirebase = false;
-
-      // 2. Tải trực tiếp từ Firebase để hiển thị UI đảm bảo real-time
-      try {
-        if (Firebase.apps.isNotEmpty) {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user != null) {
-            final snapshot = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .collection('orders')
-                .get(); 
-                
-            if (snapshot.docs.isNotEmpty) {
-              final List<OrderItem> cloudOrders = snapshot.docs.map((doc) {
-                final data = doc.data();
-                return OrderItem.fromMap(data, catalog);
-              }).toList();
-              
-              cloudOrders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-              _orders = cloudOrders.where((o) => o.userId == userId).toList();
-              loadedFromFirebase = true;
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Lỗi tải trực tiếp từ Firebase: $e');
-      }
-
-      // 3. Fallback đọc từ SQLite nếu Firebase lỗi/không kết nối
-      if (!loadedFromFirebase) {
-        var allOrders = await _db.getOrders(catalog);
-        _orders = allOrders.where((o) => o.userId == userId).toList();
-      }
-
-      // Check trạng thái thanh toán PayOS
       await refreshUnpaidPayOSOrders(catalog);
 
-      if (!loadedFromFirebase) {
-        var allOrders = await _db.getOrders(catalog);
-        _orders = allOrders.where((o) => o.userId == userId).toList();
-      }
     } catch (e) {
       debugPrint('Error loading orders: $e');
       _isLoading = false;

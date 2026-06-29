@@ -608,6 +608,22 @@ class DatabaseService {
     }
   }
 
+  // Save order to local database only (no cloud sync)
+  Future<void> saveOrderLocal(OrderItem order) async {
+    final db = await database;
+    if (_useFallback || db == null) {
+      _upsertFallbackOrder(order.toMap());
+      return;
+    }
+
+    try {
+      await db.insert('orders', order.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (e) {
+      debugPrint('Failed save SQLite order locally: $e');
+      _upsertFallbackOrder(order.toMap());
+    }
+  }
+
   ChatMessage _welcomeMessage() {
     return ChatMessage(
       id: 'welcome',
