@@ -343,7 +343,10 @@ class DatabaseService {
         final batch = FirebaseFirestore.instance.batch();
         for (var card in cards) {
           final docRef = collection.doc(card.id);
-          batch.set(docRef, card.toMap(), SetOptions(merge: true));
+          final map = card.toMap();
+          // Loại bỏ trường stock_quantity để không đè lên số lượng mà Admin đã set trên Firebase
+          map.remove('stock_quantity');
+          batch.set(docRef, map, SetOptions(merge: true));
         }
         await batch.commit();
       } catch (e) {
