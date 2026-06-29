@@ -225,8 +225,18 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          try {
+            await db.execute('ALTER TABLE orders ADD COLUMN rating REAL');
+            await db.execute('ALTER TABLE orders ADD COLUMN feedback TEXT');
+          } catch (e) {
+            debugPrint('Error upgrading database: $e');
+          }
+        }
+      },
     );
   }
 
@@ -265,7 +275,9 @@ class DatabaseService {
         status TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         shipping_address TEXT NOT NULL,
-        payment_method TEXT NOT NULL
+        payment_method TEXT NOT NULL,
+        rating REAL,
+        feedback TEXT
       )
     ''');
 
@@ -661,5 +673,48 @@ class DatabaseService {
       }
     }
     return true;
+  }
+
+  // --- PUBLIC REVIEWS ---
+  Future<void> savePublicReview({
+    required String cardId,
+    required String userName,
+    required double rating,
+    required String feedback,
+  }) async {
+    if (!_isFirebaseInitialized || !await _hasInternet()) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('reviews').add({
+        'card_id': cardId,
+        'user_name': userName,
+        'rating': rating,
+        'feedback': feedback,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Failed to save public review: $e');
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> getCardReviews(String cardId) {
+    if (!_isFirebaseInitialized) return Stream.value([]);
+    
+    return FirebaseFirestore.instance
+        .collection('reviews')
+        .where('card_id', ==: cardId)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> getOrdersFirestoreStream(String firebaseUid) {
+    if (!_isFirebaseInitialized) return const Stream.empty();
+    
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(firebaseUid)
+        .collection('orders')
+        .snapshots();
   }
 }

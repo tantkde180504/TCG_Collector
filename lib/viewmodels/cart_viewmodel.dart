@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:math';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
@@ -12,6 +14,7 @@ class CartViewModel extends ChangeNotifier {
   List<CartItem> _items = [];
   List<OrderItem> _orders = [];
   bool _isLoading = false;
+  StreamSubscription? _ordersSubscription;
   
   String _appliedCoupon = '';
   double _discountPercent = 0.0;
@@ -387,24 +390,104 @@ class CartViewModel extends ChangeNotifier {
   }
 
   Future<void> loadOrders(String userId, List<PokemonCard> catalog) async {
+    // Nếu đã đang lắng nghe rồi thì không cần đăng ký lại
+    if (_ordersSubscription != null) return;
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _db.syncOrdersFromCloud();
-
+      // 1. Tải dữ liệu ban đầu từ SQLite/Local
       var allOrders = await _db.getOrders(catalog);
       _orders = allOrders.where((o) => o.userId == userId).toList();
+      _isLoading = false;
+      notifyListeners();
 
+      // 2. Bắt đầu lắng nghe thay đổi thời gian thực từ Firestore
+      // Giả định: Trong DatabaseService, chúng ta cần dùng UID của Firebase để lắng nghe
+      // Vì loadOrders hiện tại đang nhận userId (email), tôi cần lấy UID từ FirebaseAuth 
+      // Nhưng để đơn giản và nhất quán với DatabaseService hiện tại, 
+      // tôi sẽ giả định DatabaseService tự xử lý việc tìm UID hoặc dùng userId này.
+      // Tuy nhiên, DatabaseService.getOrdersFirestoreStream yêu cầu firebaseUid.
+      
+      // Để chính xác nhất, tôi sẽ lấy UID từ FirebaseAuth ngay tại đây.
+      final firebaseUid = _getFirebaseUid();
+      if (firebaseUid != null) {
+        _ordersSubscription = _db.getOrdersFirestoreStream(firebaseUid).listen((snapshot) async {
+          debugPrint('Orders Firestore updated: ${snapshot.docs.length} docs');
+          
+          // Khi có thay đổi từ Firestore, cập nhật vào local database
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final order = OrderItem.fromMap(data, catalog);
+            await _db.saveOrder(order);
+          }
+          
+          // Tải lại danh sách từ local database (đã được cập nhật) để hiển thị lên UI
+          final updatedOrders = await _db.getOrders(catalog);
+          _orders = updatedOrders.where((o) => o.userId == userId).toList();
+          notifyListeners();
+        });
+      }
+      
       await refreshUnpaidPayOSOrders(catalog);
-
-      allOrders = await _db.getOrders(catalog);
-      _orders = allOrders.where((o) => o.userId == userId).toList();
     } catch (e) {
       debugPrint('Error loading orders: $e');
+      _isLoading = false;
+      notifyListeners();
     }
+  }
 
-    _isLoading = false;
-    notifyListeners();
+  String? _getFirebaseUid() {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ordersSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> submitFeedback(String orderId, double rating, String feedback, String userName) async {
+    final index = _orders.indexWhere((o) => o.orderId == orderId);
+    if (index < 0) return;
+
+    final existing = _orders[index];
+    final updatedOrder = OrderItem(
+      orderId: existing.orderId,
+      userId: existing.userId,
+      items: existing.items,
+      totalAmount: existing.totalAmount,
+      status: existing.status,
+      timestamp: existing.timestamp,
+      shippingAddress: existing.shippingAddress,
+      paymentMethod: existing.paymentMethod,
+      rating: rating,
+      feedback: feedback,
+    );
+
+    try {
+      // 1. Lưu vào đơn hàng cá nhân (SQLite + Firestore user subcollection)
+      await _db.saveOrder(updatedOrder);
+      _orders[index] = updatedOrder;
+
+      // 2. Lưu vào bộ sưu tập reviews công khai cho từng sản phẩm
+      for (final item in existing.items) {
+        await _db.savePublicReview(
+          cardId: item.card.id,
+          userName: userName,
+          rating: rating,
+          feedback: feedback,
+        );
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error saving feedback: $e');
+    }
   }
 }
