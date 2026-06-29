@@ -4,6 +4,7 @@ import '../../viewmodels/auth_viewmodel.dart';
 import 'user_management_tab.dart';
 import 'product_management_tab.dart';
 import 'revenue_tab.dart';
+import 'order_management_tab.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -18,7 +19,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -49,6 +50,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           tabs: const [
             Tab(icon: Icon(Icons.people_alt_rounded), text: 'Tài khoản'),
             Tab(icon: Icon(Icons.style_rounded), text: 'Sản phẩm'),
+            Tab(icon: Icon(Icons.shopping_bag_rounded), text: 'Đơn hàng'),
             Tab(icon: Icon(Icons.insights_rounded), text: 'Doanh thu'),
           ],
         ),
@@ -58,6 +60,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         children: const [
           UserManagementTab(),
           ProductManagementTab(),
+          OrderManagementTab(),
           RevenueTab(),
         ],
       ),

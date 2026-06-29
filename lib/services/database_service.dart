@@ -653,6 +653,53 @@ class DatabaseService {
     }
   }
 
+  Future<bool> updateOrderStatus(String userId, String orderId, String newStatus) async {
+    if (_isFirebaseInitialized && await _hasInternet()) {
+      try {
+        // Dùng collectionGroup để tìm đúng document reference theo orderId,
+        // tránh lỗi mismatch giữa email (userId trong order) và UID (Firestore path thực tế)
+        final snapshot = await FirebaseFirestore.instance
+            .collectionGroup('orders')
+            .where('order_id', isEqualTo: orderId)
+            .limit(1)
+            .get();
+
+        if (snapshot.docs.isEmpty) {
+          debugPrint('Admin: Order $orderId not found in Firestore');
+          return false;
+        }
+
+        // Cập nhật trực tiếp qua reference thực của document (đúng path UID)
+        await snapshot.docs.first.reference.update({'status': newStatus});
+      } catch (e) {
+        debugPrint('Failed to update order status in Firestore: $e');
+        return false;
+      }
+    }
+
+    // Cập nhật local SQLite để phản ánh ngay lập tức trên UI
+    final db = await database;
+    if (db != null) {
+      try {
+        await db.update(
+          'orders',
+          {'status': newStatus},
+          where: 'order_id = ?',
+          whereArgs: [orderId],
+        );
+      } catch (e) {
+        debugPrint('Failed to update order status in SQLite: $e');
+      }
+    } else {
+      // Cập nhật fallback memory list
+      final index = _fallbackOrders.indexWhere((o) => o['order_id'] == orderId);
+      if (index >= 0) {
+        _fallbackOrders[index]['status'] = newStatus;
+      }
+    }
+    return true;
+  }
+
   Future<bool> deleteCard(String cardId) async {
     final db = await database;
     if (db != null) {
@@ -671,3 +718,4 @@ class DatabaseService {
     return true;
   }
 }
+
