@@ -1,80 +1,189 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/user_service.dart';
 
-class UserManagementTab extends StatelessWidget {
+enum UserSortOption { nameAsc, newest, oldest, lastLogin }
+
+enum UserRole {
+  customer('Customer', 'customer'),
+  admin('Admin', 'admin'),
+  superAdmin('Super Admin', 'super_admin');
+
+  final String label;
+  final String firestoreValue;
+  const UserRole(this.label, this.firestoreValue);
+  
+  static UserRole fromString(String val) {
+    return UserRole.values.firstWhere((e) => e.firestoreValue == val, orElse: () => UserRole.customer);
+  }
+}
+
+class UserOrderStats {
+  final int orderCount;
+  final double totalSpent;
+  final DateTime? lastPurchaseAt;
+  const UserOrderStats({this.orderCount = 0, this.totalSpent = 0, this.lastPurchaseAt});
+}
+
+class AdminUser {
+  final String uid;
+  final String displayName;
+  final String email;
+  final String? photoUrl;
+  final UserRole role;
+  final bool isDisabled;
+  final bool emailVerified;
+  final DateTime? createdAt;
+  final DateTime? lastLoginAt;
+  final DateTime? lastPurchaseAt;
+  final String? phone;
+  final String? address;
+
+  AdminUser({
+    required this.uid,
+    required this.displayName,
+    required this.email,
+    this.photoUrl,
+    required this.role,
+    this.isDisabled = false,
+    this.emailVerified = false,
+    this.createdAt,
+    this.lastLoginAt,
+    this.lastPurchaseAt,
+    this.phone,
+    this.address,
+  });
+
+  factory AdminUser.fromMap(Map<String, dynamic> map) {
+    return AdminUser(
+      uid: map['uid'] ?? '',
+      displayName: map['display_name'] ?? 'Trainer',
+      email: map['email'] ?? '',
+      photoUrl: map['photo_url'],
+      role: UserRole.fromString(map['role'] ?? 'customer'),
+      isDisabled: map['is_disabled'] ?? false,
+      emailVerified: map['email_verified'] ?? false,
+      createdAt: (map['created_at'] as Timestamp?)?.toDate(),
+      lastLoginAt: (map['last_login_at'] as Timestamp?)?.toDate(),
+      lastPurchaseAt: (map['last_purchase_at'] as Timestamp?)?.toDate(),
+      phone: map['phone'],
+      address: map['address'],
+    );
+  }
+}
+
+class UserManagementTab extends StatefulWidget {
   const UserManagementTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: UserService.instance.getAllUsers(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final users = snapshot.data ?? [];
-        if (users.isEmpty) return const Center(child: Text('Chưa có người dùng nào.'));
-        
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: users.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final user = users[index];
-            return Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.amber,
-                  child: Icon(Icons.person, color: Colors.black),
-                ),
-                title: Text(user['display_name'] ?? 'Trainer', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(user['email'] ?? 'No email'),
-                    Text('UID: ${user['uid']}', style: const TextStyle(fontSize: 10, color: Colors.white38)),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  State<UserManagementTab> createState() => _UserManagementTabState();
+}
+
+class _UserManagementTabState extends State<UserManagementTab> {
+  UserSortOption _sortOption = UserSortOption.newest;
+  int _currentPage = 0;
+  final Set<String> _selectedUids = {};
+  final Map<String, UserOrderStats> _orderStats = {};
+  List<AdminUser> _allUsers = [];
+  bool _isLoading = true;
+
+  int get _totalPages => (_allUsers.isEmpty) ? 1 : (_allUsers.length / 10).ceil();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    final usersMap = await UserService.instance.getAllUsers();
+    _allUsers = usersMap.map((e) => AdminUser.fromMap(e)).toList();
+    _sortUsers();
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _sortUsers() {
+    _allUsers.sort((a, b) {
+      switch (_sortOption) {
+        case UserSortOption.nameAsc:
+          return a.displayName.compareTo(b.displayName);
+        case UserSortOption.newest:
+          return (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now());
+        case UserSortOption.oldest:
+          return (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now());
+        case UserSortOption.lastLogin:
+          return (b.lastLoginAt ?? DateTime.now()).compareTo(a.lastLoginAt ?? DateTime.now());
+      }
+    });
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '—';
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  String _formatRelative(DateTime? date) {
+    if (date == null) return '—';
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
+  void _snack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
+      ),
     );
   }
 
-  Widget _filterDropdown<T>({
-    required String label,
-    required T value,
-    required Map<T, String> items,
-    required ValueChanged<T> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: const Color(0xFF2A2A2A),
-          style: const TextStyle(fontSize: 12, color: Colors.white),
-          items: items.entries
-              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)))
-              .toList(),
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final startIndex = _currentPage * 10;
+    final endIndex = (startIndex + 10).clamp(0, _allUsers.length);
+    final displayedUsers = _allUsers.sublist(startIndex, endIndex);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSortRow(),
+              if (_selectedUids.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildBulkActionBar(),
+              ],
+            ],
+          ),
         ),
-      ),
+        Expanded(
+          child: displayedUsers.isEmpty
+              ? const Center(child: Text('Chưa có người dùng nào.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayedUsers.length,
+                  itemBuilder: (context, index) {
+                    return _buildUserCard(displayedUsers[index]);
+                  },
+                ),
+        ),
+        if (_allUsers.isNotEmpty)
+          _buildPagination(startIndex + 1, endIndex, _allUsers.length),
+      ],
     );
   }
 
@@ -117,6 +226,7 @@ class UserManagementTab extends StatelessWidget {
         onSelected: (_) => setState(() {
           _sortOption = option;
           _currentPage = 0;
+          _sortUsers();
         }),
       ),
     );
