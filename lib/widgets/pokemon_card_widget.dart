@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/pokemon_card.dart';
 import '../viewmodels/cart_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
 import '../views/detail_screen.dart';
 import 'glowing_border.dart';
 
@@ -136,23 +137,24 @@ class PokemonCardWidget extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Stock tag (top left)
-                      Positioned(
-                        top: 2,
-                        left: 2,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: card.stockQuantity > 0 ? Colors.green.shade800 : Colors.red.shade800,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.white24, width: 0.5),
-                          ),
-                          child: Text(
-                            card.stockQuantity > 0 ? 'Stock: ${card.stockQuantity}' : 'Out of Stock',
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      // Out of Stock badge - only shown when stock is 0
+                      if (card.stockQuantity == 0)
+                        Positioned(
+                          top: 2,
+                          left: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade900,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.7), width: 0.8),
+                            ),
+                            child: const Text(
+                              'Out of Stock',
+                              style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -199,19 +201,20 @@ class PokemonCardWidget extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '\$${card.marketPrice.toStringAsFixed(2)}',
+                          context.watch<SettingsViewModel>().formatPrice(card.marketPrice, isExact: true),
                           style: const TextStyle(
                             color: Colors.greenAccent,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
                         ),
-                        // Quick Add button
+                        // Quick Add button - disabled when out of stock
                         Material(
-                          color: Colors.amber,
+                          color: card.stockQuantity > 0 ? Colors.amber : Colors.grey.shade700,
                           borderRadius: BorderRadius.circular(6),
                           child: InkWell(
-                            onTap: () {
+                            onTap: card.stockQuantity > 0 ? () {
+                              context.read<SettingsViewModel>().triggerHaptic();
                               context.read<CartViewModel>().addToCart(card);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -220,14 +223,14 @@ class PokemonCardWidget extends StatelessWidget {
                                   backgroundColor: Colors.indigo,
                                 ),
                               );
-                            },
+                            } : null,
                             borderRadius: BorderRadius.circular(6),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               child: Icon(
-                                Icons.add_shopping_cart,
+                                card.stockQuantity > 0 ? Icons.add_shopping_cart : Icons.block,
                                 size: 14,
-                                color: Colors.black,
+                                color: card.stockQuantity > 0 ? Colors.black : Colors.white54,
                               ),
                             ),
                           ),

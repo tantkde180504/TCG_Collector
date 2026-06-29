@@ -2,9 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/pokemon_card.dart';
 import '../models/cart_item.dart';
 import '../models/order_item.dart';
@@ -67,13 +64,30 @@ class CartViewModel extends ChangeNotifier {
 
   Future<void> addToCart(PokemonCard card, {int quantity = 1}) async {
     try {
-      await _db.addToCart(card.id, quantity);
-      
+      if (card.stockQuantity <= 0) return; // Cannot add out of stock
+
       final index = _items.indexWhere((item) => item.card.id == card.id);
+      int newQuantity = quantity;
+
       if (index >= 0) {
-        _items[index].quantity += quantity;
+        newQuantity = _items[index].quantity + quantity;
+      }
+      
+      // Cap at available stock
+      if (newQuantity > card.stockQuantity) {
+        newQuantity = card.stockQuantity;
+      }
+
+      // Calculate the actual difference we added
+      final actualAdded = index >= 0 ? (newQuantity - _items[index].quantity) : newQuantity;
+      if (actualAdded <= 0) return; // Already at max stock
+
+      await _db.addToCart(card.id, actualAdded);
+      
+      if (index >= 0) {
+        _items[index].quantity = newQuantity;
       } else {
-        _items.add(CartItem(card: card, quantity: quantity));
+        _items.add(CartItem(card: card, quantity: newQuantity));
       }
       notifyListeners();
     } catch (e) {
@@ -83,14 +97,24 @@ class CartViewModel extends ChangeNotifier {
 
   Future<void> updateQuantity(String cardId, int quantity) async {
     try {
-      await _db.updateCartQuantity(cardId, quantity);
-      
-      if (quantity <= 0) {
+      final index = _items.indexWhere((item) => item.card.id == cardId);
+      if (index < 0 && quantity > 0) return; // Should not happen
+
+      int targetQuantity = quantity;
+      if (index >= 0) {
+        final maxStock = _items[index].card.stockQuantity;
+        if (targetQuantity > maxStock) {
+          targetQuantity = maxStock;
+        }
+      }
+
+      if (targetQuantity <= 0) {
+        await _db.removeFromCart(cardId);
         _items.removeWhere((item) => item.card.id == cardId);
       } else {
-        final index = _items.indexWhere((item) => item.card.id == cardId);
+        await _db.updateCartQuantity(cardId, targetQuantity);
         if (index >= 0) {
-          _items[index].quantity = quantity;
+          _items[index].quantity = targetQuantity;
         }
       }
       notifyListeners();
@@ -98,6 +122,7 @@ class CartViewModel extends ChangeNotifier {
       debugPrint('Error updating quantity: $e');
     }
   }
+
 
   Future<void> removeFromCart(String cardId) async {
     try {

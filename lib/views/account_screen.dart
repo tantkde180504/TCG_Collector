@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
 import '../services/user_service.dart';
 import 'login_screen.dart';
 import 'order_history_screen.dart';
@@ -553,52 +554,13 @@ Widget _sheetTitle(IconData icon, Color color, String title) => Padding(
 // 1. SETTINGS SHEET
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _SettingsSheet extends StatefulWidget {
+class _SettingsSheet extends StatelessWidget {
   const _SettingsSheet();
 
   @override
-  State<_SettingsSheet> createState() => _SettingsSheetState();
-}
-
-class _SettingsSheetState extends State<_SettingsSheet> {
-  bool _notifications = true;
-  bool _sounds = true;
-  bool _haptics = true;
-  String _currency = 'USD';
-  String _language = 'English';
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPrefs();
-  }
-
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _notifications = prefs.getBool(_kNotifications) ?? true;
-      _sounds = prefs.getBool(_kSounds) ?? true;
-      _haptics = prefs.getBool(_kHaptics) ?? true;
-      _currency = prefs.getString(_kCurrency) ?? 'USD';
-      _language = prefs.getString(_kLanguage) ?? 'English';
-      _loaded = true;
-    });
-  }
-
-  Future<void> _saveBool(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-  }
-
-  Future<void> _saveString(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final settingsVM = context.watch<SettingsViewModel>();
+
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       minChildSize: 0.5,
@@ -612,7 +574,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 Icons.tune_rounded, const Color(0xFF7B61FF), 'Settings'),
             const SizedBox(height: 20),
             Expanded(
-              child: !_loaded
+              child: !settingsVM.isLoaded
                   ? const Center(
                       child: CircularProgressIndicator(color: Colors.amber))
                   : ListView(
@@ -625,33 +587,24 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                           icon: Icons.notifications_active_rounded,
                           iconColor: Colors.amber,
                           label: 'Push Notifications',
-                          value: _notifications,
-                          onChanged: (v) {
-                            setState(() => _notifications = v);
-                            _saveBool(_kNotifications, v);
-                          },
+                          value: settingsVM.notifications,
+                          onChanged: settingsVM.setNotifications,
                         ),
                         _ToggleRow(
                           icon: Icons.volume_up_rounded,
                           iconColor: const Color(0xFF4FC3F7),
                           label: 'Sound Effects',
-                          value: _sounds,
-                          onChanged: (v) {
-                            setState(() => _sounds = v);
-                            _saveBool(_kSounds, v);
-                          },
+                          value: settingsVM.sounds,
+                          onChanged: settingsVM.setSounds,
                         ),
                         _ToggleRow(
                           icon: Icons.vibration_rounded,
                           iconColor: const Color(0xFF7B61FF),
                           label: 'Haptic Feedback',
-                          value: _haptics,
+                          value: settingsVM.haptics,
                           onChanged: (v) {
-                            setState(() => _haptics = v);
-                            _saveBool(_kHaptics, v);
-                            if (v) {
-                              HapticFeedback.lightImpact();
-                            }
+                            settingsVM.setHaptics(v);
+                            settingsVM.triggerHaptic();
                           },
                         ),
                         const SizedBox(height: 20),
@@ -662,11 +615,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                           iconColor: const Color(0xFF00C896),
                           label: 'Currency',
                           options: const ['USD', 'EUR', 'VND'],
-                          selected: _currency,
-                          onSelected: (v) {
-                            setState(() => _currency = v);
-                            _saveString(_kCurrency, v);
-                          },
+                          selected: settingsVM.currency,
+                          onSelected: settingsVM.setCurrency,
                         ),
                         const SizedBox(height: 12),
                         _SegmentRow(
@@ -674,11 +624,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                           iconColor: const Color(0xFFFF7043),
                           label: 'Language',
                           options: const ['English', 'Tiếng Việt'],
-                          selected: _language,
-                          onSelected: (v) {
-                            setState(() => _language = v);
-                            _saveString(_kLanguage, v);
-                          },
+                          selected: settingsVM.language,
+                          onSelected: settingsVM.setLanguage,
                         ),
                         const SizedBox(height: 24),
                       ],

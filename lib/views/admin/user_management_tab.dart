@@ -395,7 +395,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
       return CircleAvatar(
         radius: radius,
         backgroundImage: NetworkImage(url),
-        onBackgroundImageError: (_, __) {},
+        onBackgroundImageError: (_, _) {},
         child: url.isEmpty ? _avatarFallback(user, radius) : null,
       );
     }

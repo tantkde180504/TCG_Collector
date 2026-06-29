@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/auth_viewmodel.dart';
-import 'home_screen.dart';
 import 'register_screen.dart';
 import 'device_verification_screen.dart';
 import 'forgot_password_screen.dart';
@@ -60,7 +59,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleSocialLogin(String provider) async {
     final authVM = context.read<AuthViewModel>();
-    await authVM.loginSocial(provider);
+    final success = await authVM.loginSocial(provider);
+    if (!mounted) return;
+    
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$provider Sign-In failed or was cancelled.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override

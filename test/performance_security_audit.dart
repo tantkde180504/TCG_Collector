@@ -3,6 +3,7 @@
 /// for the Pokémon TCG Collector application.
 ///
 /// Run these checks before every production build.
+library;
 
 // ignore_for_file: prefer_const_literals_to_create_immutables
 

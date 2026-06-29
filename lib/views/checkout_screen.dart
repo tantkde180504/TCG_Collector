@@ -4,6 +4,8 @@ import '../models/order_item.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../viewmodels/notification_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
+import '../services/local_notification_service.dart';
 import '../widgets/payos_widgets.dart';
 import '../services/user_service.dart';
 
@@ -113,6 +115,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _placeOrder(CartViewModel cartVM) async {
     final authVM = context.read<AuthViewModel>();
     final notifVM = context.read<NotificationViewModel>();
+    final settingsVM = context.read<SettingsViewModel>();
     
     final order = await cartVM.submitOrder(authVM.email);
     if (!mounted) return;
@@ -138,8 +141,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         // Add success order notification
         notifVM.addNotification(
           title: 'Order Placed Successfully!',
-          body: 'Your order ${order.orderId} for \$${order.totalAmount.toStringAsFixed(2)} is now processing.',
+          body: 'Your order ${order.orderId} for ${settingsVM.formatPrice(order.totalAmount, isExact: true)} is now processing.',
           type: 'order_status',
+        );
+
+        LocalNotificationService.showOrderNotification(
+          title: 'Order Placed Successfully!',
+          body: 'Your order ${order.orderId} is now processing.',
+          notificationsEnabled: settingsVM.notifications,
+          soundEnabled: settingsVM.sounds,
         );
         cartVM.setCheckoutStep(2);
       }
@@ -158,6 +168,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final cartVM = context.watch<CartViewModel>();
+    final settingsVM = context.watch<SettingsViewModel>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -208,7 +219,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: cartVM.isLoading ? null : () => _nextStep(cartVM),
+                      onPressed: cartVM.isLoading ? null : () {
+                        settingsVM.triggerHaptic();
+                        _nextStep(cartVM);
+                      },
                       child: cartVM.isLoading
                           ? const SizedBox(
                               width: 20,
@@ -216,7 +230,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                             )
                           : Text(
-                              cartVM.checkoutStep == 0 ? 'PROCEED TO PAYMENT' : 'PLACE ORDER (\$${cartVM.grandTotal.toStringAsFixed(2)})',
+                              cartVM.checkoutStep == 0 ? 'PROCEED TO PAYMENT' : 'PLACE ORDER (${settingsVM.formatPrice(cartVM.grandTotal, isExact: true)})',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                     ),
@@ -517,7 +531,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('${it.quantity}x ${it.card.name}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text('\$${(it.card.marketPrice * it.quantity).toStringAsFixed(2)}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(context.read<SettingsViewModel>().formatPrice(it.card.marketPrice * it.quantity, isExact: true), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
             );
@@ -586,7 +600,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('${it.quantity}x ${it.card.name}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          Text('\$${(it.card.marketPrice * it.quantity).toStringAsFixed(2)}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text(context.read<SettingsViewModel>().formatPrice(it.card.marketPrice * it.quantity, isExact: true), style: const TextStyle(color: Colors.white70, fontSize: 12)),
                         ],
                       ),
                     )),
@@ -595,7 +609,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Amount Paid', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('\$${_completedOrder!.totalAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(context.read<SettingsViewModel>().formatPrice(_completedOrder!.totalAmount, isExact: true), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 15)),
                   ],
                 ),
               ],
@@ -767,7 +781,7 @@ class _CheckoutAddressBookSheetState extends State<_CheckoutAddressBookSheet> {
                           controller: ctrl,
                           padding: const EdgeInsets.all(20),
                           itemCount: _addresses.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, _) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final addr = _addresses[i];
                             return InkWell(

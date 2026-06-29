@@ -4,6 +4,7 @@ import '../services/chat_catalog_context.dart';
 import '../services/database_service.dart';
 import '../services/groq_service.dart';
 import '../services/oak_fallback_service.dart';
+import '../viewmodels/settings_viewmodel.dart';
 
 class ChatViewModel extends ChangeNotifier {
   final DatabaseService _db = DatabaseService.instance;
@@ -26,7 +27,7 @@ class ChatViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> sendMessage(String text, {required String senderName}) async {
+  Future<void> sendMessage(String text, {required String senderName, required SettingsViewModel settingsVM}) async {
     if (text.trim().isEmpty || _isTyping) return;
 
     final userMsg = ChatMessage(
@@ -46,10 +47,10 @@ class ChatViewModel extends ChangeNotifier {
       debugPrint('Error saving user message: $e');
     }
 
-    await _requestReply(text);
+    await _requestReply(text, settingsVM);
   }
 
-  Future<void> _requestReply(String userText) async {
+  Future<void> _requestReply(String userText, SettingsViewModel settingsVM) async {
     _isTyping = true;
     notifyListeners();
 
@@ -64,6 +65,7 @@ class ChatViewModel extends ChangeNotifier {
         userText,
         _messages,
         catalogContext: catalogContext,
+        settingsVM: settingsVM,
       );
       senderLabel = 'Prof. Oak (Groq AI)';
       _usingOfflineMode = false;

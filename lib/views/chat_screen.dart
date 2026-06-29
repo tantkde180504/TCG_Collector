@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/chat_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -56,8 +57,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final authVM = context.read<AuthViewModel>();
     final chatVM = context.read<ChatViewModel>();
+    final settingsVM = context.read<SettingsViewModel>();
 
-    chatVM.sendMessage(text, senderName: authVM.displayName);
+    chatVM.sendMessage(text, senderName: authVM.displayName, settingsVM: settingsVM);
     _messageController.clear();
     _scrollToBottom();
   }
@@ -65,7 +67,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendSuggestion(String suggestion) {
     final authVM = context.read<AuthViewModel>();
     final chatVM = context.read<ChatViewModel>();
-    chatVM.sendMessage(suggestion, senderName: authVM.displayName);
+    final settingsVM = context.read<SettingsViewModel>();
+    chatVM.sendMessage(suggestion, senderName: authVM.displayName, settingsVM: settingsVM);
     _scrollToBottom();
   }
 

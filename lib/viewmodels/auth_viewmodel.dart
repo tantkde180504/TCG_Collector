@@ -640,8 +640,11 @@ class AuthViewModel extends ChangeNotifier {
     if (auth != null) {
       await auth.signOut();
       try {
+        await _googleSignIn.disconnect();
         await _googleSignIn.signOut();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Google SignOut/Disconnect error: $e');
+      }
     } else {
       _mockAuthenticated = false;
       final prefs = await SharedPreferences.getInstance();

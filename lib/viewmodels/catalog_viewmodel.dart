@@ -34,30 +34,57 @@ class CatalogViewModel extends ChangeNotifier {
     try {
       List<PokemonCard> fetched = [];
       if (_searchQuery.isEmpty) {
-        // Fetch popular cards from a cool set (e.g., Pokémon 151)
         fetched = await TcgApiService.instance.fetchCards(query: 'set.id:sv3pt5', pageSize: 40);
       } else {
-        // Dynamic search by name
         fetched = await TcgApiService.instance.fetchCards(query: 'name:"*$_searchQuery*"', pageSize: 40);
       }
-      
+
       if (fetched.isNotEmpty) {
-        _allCards = fetched;
-        // Save them to local database to ensure cart and offline capabilities work
+        // Before caching, merge the current SQLite stock values so they are preserved
+        final cachedCards = await _db.getCards();
+        final stockMap = {for (var c in cachedCards) c.id: c.stockQuantity};
+
+        // Apply existing stock to newly fetched cards
+        final mergedCards = fetched.map((card) {
+          final existingStock = stockMap[card.id];
+          if (existingStock != null) {
+            return PokemonCard(
+              id: card.id, name: card.name, type: card.type, rarity: card.rarity,
+              marketPrice: card.marketPrice, priceHistory: card.priceHistory,
+              description: card.description, imageUrl: card.imageUrl, hp: card.hp,
+              attackName: card.attackName, attackDamage: card.attackDamage,
+              weakness: card.weakness, retreatCost: card.retreatCost,
+              stockQuantity: existingStock,
+            );
+          }
+          return card;
+        }).toList();
+
+        _allCards = mergedCards;
         await _db.cacheCards(_allCards);
       } else if (_allCards.isEmpty) {
-        // Fallback to cached cards if offline and we have no cards currently
         _allCards = await _db.getCards();
+      } else {
+        // Re-read from SQLite to pick up any stock changes made while app is running
+        final refreshed = await _db.getCards();
+        if (refreshed.isNotEmpty) _allCards = refreshed;
       }
 
       _applyFilterAndSort();
     } catch (e) {
       debugPrint('Error loading cards: $e');
+      // On error, still try to read from local DB so stock changes show
+      final local = await _db.getCards();
+      if (local.isNotEmpty) {
+        _allCards = local;
+        _applyFilterAndSort();
+      }
     }
 
     _isLoading = false;
     notifyListeners();
   }
+
 
   void setSearchQuery(String query) {
     _searchQuery = query;
@@ -78,6 +105,23 @@ class CatalogViewModel extends ChangeNotifier {
 
   void setSortOption(String sortOption) {
     _sortBy = sortOption;
+    _applyFilterAndSort();
+    notifyListeners();
+  }
+
+  /// Cập nhật tồn kho một thẻ ngay trong bộ nhớ (không cần re-fetch từ network)
+  void updateCardStockInMemory(String cardId, int newStock) {
+    final idx = _allCards.indexWhere((c) => c.id == cardId);
+    if (idx < 0) return;
+    final old = _allCards[idx];
+    _allCards[idx] = PokemonCard(
+      id: old.id, name: old.name, type: old.type, rarity: old.rarity,
+      marketPrice: old.marketPrice, priceHistory: old.priceHistory,
+      description: old.description, imageUrl: old.imageUrl, hp: old.hp,
+      attackName: old.attackName, attackDamage: old.attackDamage,
+      weakness: old.weakness, retreatCost: old.retreatCost,
+      stockQuantity: newStock,
+    );
     _applyFilterAndSort();
     notifyListeners();
   }

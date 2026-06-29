@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/tcg_price_service.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/settings_viewmodel.dart';
 
 /// Enhanced PriceChart that displays real market data from pokemontcg.io API.
 /// Shows date labels on X-axis, source badge, % change, and loading/error states.
@@ -42,6 +44,7 @@ class PriceChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settingsVM = context.watch<SettingsViewModel>();
     final chartColor = _getChartColor();
     final displayPrices = priceData?.prices ?? prices;
     final displayDates = priceData?.dates ?? [];
@@ -153,9 +156,9 @@ class PriceChart extends StatelessWidget {
                 // Current price
                 Text(
                   currentPrice != null
-                      ? '\$${currentPrice.toStringAsFixed(2)}'
+                      ? settingsVM.formatPrice(currentPrice, isExact: true)
                       : displayPrices.isNotEmpty
-                          ? '\$${displayPrices.last.toStringAsFixed(2)}'
+                          ? settingsVM.formatPrice(displayPrices.last, isExact: true)
                           : '--',
                   style: TextStyle(
                     color: chartColor,
@@ -213,7 +216,7 @@ class PriceChart extends StatelessWidget {
                                   color: Colors.white.withValues(alpha: 0.35),
                                   fontSize: 10)),
                           Text(
-                            '\$${priceData!.tcgplayerLow!.toStringAsFixed(0)}',
+                            settingsVM.formatPrice(priceData!.tcgplayerLow!),
                             style: const TextStyle(
                                 color: Colors.greenAccent,
                                 fontSize: 11,
@@ -228,7 +231,7 @@ class PriceChart extends StatelessWidget {
                                   color: Colors.white.withValues(alpha: 0.35),
                                   fontSize: 10)),
                           Text(
-                            '\$${priceData!.tcgplayerHigh! < 9999 ? priceData!.tcgplayerHigh!.toStringAsFixed(0) : '∞'}',
+                            priceData!.tcgplayerHigh! < 9999 ? settingsVM.formatPrice(priceData!.tcgplayerHigh!) : '∞',
                             style: const TextStyle(
                                 color: Colors.redAccent,
                                 fontSize: 11,
@@ -249,9 +252,9 @@ class PriceChart extends StatelessWidget {
           else if (displayPrices.isEmpty)
             _buildEmptyState()
           else if (displayPrices.length == 1)
-            _buildSinglePointState(displayPrices.first, chartColor)
+            _buildSinglePointState(displayPrices.first, chartColor, settingsVM)
           else
-            _buildChart(displayPrices, displayDates, chartColor),
+            _buildChart(displayPrices, displayDates, chartColor, settingsVM),
 
           // ── CardMarket comparison row ─────────────────────────────────────
           if (priceData?.cardmarketAvg7 != null &&
@@ -270,7 +273,7 @@ class PriceChart extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'CardMarket 7d avg: \$${priceData!.cardmarketAvg7!.toStringAsFixed(2)}',
+                    'CardMarket 7d avg: ${settingsVM.formatPrice(priceData!.cardmarketAvg7!, isExact: true)}',
                     style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 11),
@@ -279,7 +282,7 @@ class PriceChart extends StatelessWidget {
                       priceData!.cardmarketAvg30! > 0) ...[
                     const SizedBox(width: 12),
                     Text(
-                      '30d: \$${priceData!.cardmarketAvg30!.toStringAsFixed(2)}',
+                      '30d: ${settingsVM.formatPrice(priceData!.cardmarketAvg30!, isExact: true)}',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.25),
                           fontSize: 11),
@@ -296,7 +299,7 @@ class PriceChart extends StatelessWidget {
   }
 
   Widget _buildChart(
-      List<double> prices, List<String> dates, Color chartColor) {
+      List<double> prices, List<String> dates, Color chartColor, SettingsViewModel settingsVM) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -305,7 +308,7 @@ class PriceChart extends StatelessWidget {
             height: 140,
             width: double.infinity,
             child: CustomPaint(
-              painter: PriceChartPainter(prices: prices, color: chartColor),
+              painter: PriceChartPainter(prices: prices, color: chartColor, settingsVM: settingsVM),
             ),
           ),
           const SizedBox(height: 6),
@@ -436,7 +439,7 @@ class PriceChart extends StatelessWidget {
     );
   }
 
-  Widget _buildSinglePointState(double price, Color chartColor) {
+  Widget _buildSinglePointState(double price, Color chartColor, SettingsViewModel settingsVM) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Container(
@@ -454,7 +457,7 @@ class PriceChart extends StatelessWidget {
                   size: 28, color: chartColor.withValues(alpha: 0.5)),
               const SizedBox(height: 6),
               Text(
-                'Today\'s price: \$${price.toStringAsFixed(2)}',
+                'Today\'s price: ${settingsVM.formatPrice(price, isExact: true)}',
                 style: const TextStyle(color: Colors.white70, fontSize: 13),
               ),
               const SizedBox(height: 4),
@@ -476,8 +479,9 @@ class PriceChart extends StatelessWidget {
 class PriceChartPainter extends CustomPainter {
   final List<double> prices;
   final Color color;
+  final SettingsViewModel settingsVM;
 
-  PriceChartPainter({required this.prices, required this.color});
+  PriceChartPainter({required this.prices, required this.color, required this.settingsVM});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -523,7 +527,7 @@ class PriceChartPainter extends CustomPainter {
       if (i == 0 || i == 3) {
         final labelPrice = i == 0 ? maxPrice : minPrice;
         final textSpan = TextSpan(
-          text: '\$${labelPrice.toStringAsFixed(0)}',
+          text: settingsVM.formatPrice(labelPrice),
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.2),
             fontSize: 9,
@@ -591,7 +595,7 @@ class PriceChartPainter extends CustomPainter {
     final lastX = (prices.length - 1) * stepX;
     final lastY = getY(prices.last);
     final textSpan = TextSpan(
-      text: '\$${prices.last.toStringAsFixed(0)}',
+      text: settingsVM.formatPrice(prices.last),
       style: TextStyle(
         color: color,
         fontSize: 10,

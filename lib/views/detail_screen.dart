@@ -362,7 +362,7 @@ class _DetailScreenState extends State<DetailScreen> {
                             border: Border.all(color: widget.card.stockQuantity > 0 ? Colors.greenAccent : Colors.redAccent, width: 1),
                           ),
                           child: Text(
-                            widget.card.stockQuantity > 0 ? 'In Stock: ${widget.card.stockQuantity}' : 'Out of Stock',
+                            widget.card.stockQuantity > 0 ? 'In Stock' : 'Out of Stock',
                             style: TextStyle(
                               color: widget.card.stockQuantity > 0 ? Colors.greenAccent : Colors.redAccent,
                               fontWeight: FontWeight.bold,
@@ -496,13 +496,13 @@ class _DetailScreenState extends State<DetailScreen> {
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber,
-                    foregroundColor: Colors.black,
+                    backgroundColor: widget.card.stockQuantity > 0 ? Colors.amber : Colors.grey.shade700,
+                    foregroundColor: widget.card.stockQuantity > 0 ? Colors.black : Colors.white54,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: widget.card.stockQuantity > 0 ? () {
                     context.read<CartViewModel>().addToCart(widget.card, quantity: _quantity);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -511,10 +511,10 @@ class _DetailScreenState extends State<DetailScreen> {
                       ),
                     );
                     Navigator.of(context).pop();
-                  },
-                  child: const Text(
-                    'ADD TO CART',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  } : null,
+                  child: Text(
+                    widget.card.stockQuantity > 0 ? 'ADD TO CART' : 'OUT OF STOCK',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ),

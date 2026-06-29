@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:tcg/viewmodels/catalog_viewmodel.dart';
-import 'package:tcg/models/pokemon_card.dart';
 
 void main() {
   setUpAll(() {

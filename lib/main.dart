@@ -11,6 +11,7 @@ import 'views/login_screen.dart';
 import 'views/home_screen.dart';
 import 'views/admin/admin_dashboard_screen.dart';
 import 'services/local_notification_service.dart';
+import 'viewmodels/settings_viewmodel.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,16 +19,22 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await LocalNotificationService.init();
-  runApp(const MyApp());
+  
+  final settingsVM = SettingsViewModel();
+  await settingsVM.loadSettings();
+
+  runApp(MyApp(settingsVM: settingsVM));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final SettingsViewModel settingsVM;
+  const MyApp({super.key, required this.settingsVM});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: settingsVM),
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => CatalogViewModel()),
         ChangeNotifierProvider(create: (_) => CartViewModel()),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/catalog_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
 import '../models/order_item.dart';
 import '../models/cart_item.dart';
 import '../widgets/payos_widgets.dart';
@@ -32,6 +33,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final cartVM = context.watch<CartViewModel>();
+    final settingsVM = context.watch<SettingsViewModel>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -54,7 +56,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     return InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () => _showOrderDetailBottomSheet(context, order),
-                      child: _buildOrderCard(order),
+                      child: _buildOrderCard(order, settingsVM),
                     );
                   },
                 ),
@@ -82,7 +84,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildOrderCard(OrderItem order) {
+  Widget _buildOrderCard(OrderItem order, SettingsViewModel settingsVM) {
     final DateFormat formatter = DateFormat('MMM dd, yyyy - hh:mm a');
     final String dateString = formatter.format(order.timestamp);
     
@@ -173,7 +175,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     ),
                   ),
                   Text(
-                    '\$${(item.card.marketPrice * item.quantity).toStringAsFixed(2)}',
+                    settingsVM.formatPrice(item.card.marketPrice * item.quantity, isExact: true),
                     style: const TextStyle(color: Colors.white70),
                   ),
                 ],
@@ -193,7 +195,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               children: [
                 const Text('Total', style: TextStyle(color: Colors.white, fontSize: 16)),
                 Text(
-                  '\$${order.totalAmount.toStringAsFixed(2)}',
+                  settingsVM.formatPrice(order.totalAmount, isExact: true),
                   style: const TextStyle(color: Color(0xFF00C896), fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -233,6 +235,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           builder: (context, scrollController) {
             return Consumer<CartViewModel>(
               builder: (context, cartVM, child) {
+                final settingsVM = context.read<SettingsViewModel>();
                 final currentOrder = cartVM.orders.firstWhere(
                   (o) => o.orderId == order.orderId,
                   orElse: () => order,
@@ -343,10 +346,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 12),
-                      ...currentOrder.items.map((item) => _buildDetailItemRow(item)),
+                      ...currentOrder.items.map((item) => _buildDetailItemRow(item, settingsVM)),
                       const Divider(color: Color(0xFF333333), height: 32),
 
-                      _buildReceiptSummary(currentOrder, subtotal, shipping, discount),
+                      _buildReceiptSummary(currentOrder, subtotal, shipping, discount, settingsVM),
                       const SizedBox(height: 24),
 
                       if (currentOrder.status.toLowerCase() == 'delivered') ...[
@@ -495,7 +498,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildDetailItemRow(CartItem item) {
+  Widget _buildDetailItemRow(CartItem item, SettingsViewModel settingsVM) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
@@ -568,7 +571,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '\$${item.card.marketPrice.toStringAsFixed(2)}',
+                settingsVM.formatPrice(item.card.marketPrice, isExact: true),
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
@@ -578,7 +581,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildReceiptSummary(OrderItem order, double subtotal, double shipping, double discount) {
+  Widget _buildReceiptSummary(OrderItem order, double subtotal, double shipping, double discount, SettingsViewModel settingsVM) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -618,7 +621,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 children: [
                   const Text('Subtotal', style: TextStyle(color: Colors.white54, fontSize: 13)),
                   Text(
-                    '\$${subtotal.toStringAsFixed(2)}',
+                    settingsVM.formatPrice(subtotal, isExact: true),
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ],
@@ -631,7 +634,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   children: [
                     const Text('Discount / Coupon', style: TextStyle(color: Colors.white54, fontSize: 13)),
                     Text(
-                      '-\$${discount.toStringAsFixed(2)}',
+                      '-${settingsVM.formatPrice(discount, isExact: true)}',
                       style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -644,7 +647,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 children: [
                   const Text('Shipping Fee', style: TextStyle(color: Colors.white54, fontSize: 13)),
                   Text(
-                    shipping == 0 ? 'FREE' : '\$${shipping.toStringAsFixed(2)}',
+                    shipping == 0 ? 'FREE' : settingsVM.formatPrice(shipping, isExact: true),
                     style: TextStyle(
                       color: shipping == 0 ? Colors.greenAccent : Colors.white,
                       fontSize: 13,
@@ -660,7 +663,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 children: [
                   const Text('Grand Total', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                   Text(
-                    '\$${order.totalAmount.toStringAsFixed(2)}',
+                    settingsVM.formatPrice(order.totalAmount, isExact: true),
                     style: const TextStyle(color: Color(0xFF00C896), fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ],

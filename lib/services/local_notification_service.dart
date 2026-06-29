@@ -34,24 +34,28 @@ class LocalNotificationService {
   static Future<void> showOrderNotification({
     required String title,
     required String body,
+    bool notificationsEnabled = true,
+    bool soundEnabled = true,
   }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'order_channel_id',
+    if (!notificationsEnabled) return;
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      soundEnabled ? 'order_channel_id_sound' : 'order_channel_id_silent',
       'Order Notifications',
       channelDescription: 'Notifications for order updates',
       importance: Importance.max,
       priority: Priority.high,
-      playSound: true,
+      playSound: soundEnabled,
       enableVibration: true,
     );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentSound: true,
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentSound: soundEnabled,
       presentAlert: true,
       presentBadge: true,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );

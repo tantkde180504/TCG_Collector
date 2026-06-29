@@ -28,7 +28,7 @@ class PokemonCard {
     required this.attackDamage,
     required this.weakness,
     required this.retreatCost,
-    this.stockQuantity = 0,
+    this.stockQuantity = 50,
   });
 
   // Convert a PokemonCard into a Map. The keys must correspond to the database columns.
@@ -100,7 +100,7 @@ class PokemonCard {
       attackDamage: map['attack_damage'] ?? 0,
       weakness: map['weakness'] ?? 'None',
       retreatCost: map['retreat_cost'] ?? 1,
-      stockQuantity: map['stock_quantity'] ?? 0,
+      stockQuantity: (map['stock_quantity'] as num?)?.toInt() ?? 50,
     );
   }
 }

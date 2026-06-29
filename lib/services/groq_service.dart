@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/secrets.dart';
 import '../models/chat_message.dart';
+import '../viewmodels/settings_viewmodel.dart';
 
 class GroqService {
   static const _baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
@@ -14,7 +15,6 @@ Help trainers with card recommendations, deck building, shipping info, and order
 Use ONLY the catalog and shop data below when answering about products, prices, stats, or availability.
 If a card is not listed, say it is not currently in the shop catalog.
 
-Respond in the same language the user writes in (Vietnamese or English).
 Keep answers concise, warm, and helpful — like a real Pokémon professor.
 ''';
 
@@ -27,13 +27,14 @@ Keep answers concise, warm, and helpful — like a real Pokémon professor.
     String userMessage,
     List<ChatMessage> history, {
     required String catalogContext,
+    required SettingsViewModel settingsVM,
   }) async {
     if (Secrets.groqApiKey.isEmpty ||
         Secrets.groqApiKey == 'YOUR_GROQ_API_KEY_HERE') {
       throw GroqUnavailableException('Groq API key chưa được cấu hình.');
     }
 
-    final messages = _buildMessages(history, catalogContext);
+    final messages = _buildMessages(history, catalogContext, settingsVM);
     Object? lastError;
 
     for (final model in _modelCandidates) {
@@ -65,11 +66,26 @@ Keep answers concise, warm, and helpful — like a real Pokémon professor.
   List<Map<String, String>> _buildMessages(
     List<ChatMessage> history,
     String catalogContext,
+    SettingsViewModel settingsVM,
   ) {
+    String languagePreference = settingsVM.language == 'Vietnamese' ? 'Vietnamese' : 'English';
+    String currencyPreference = settingsVM.currency == 'VND' ? 'Vietnamese Dong (VND)' : (settingsVM.currency == 'EUR' ? 'Euros (EUR)' : 'US Dollars (USD)');
+
+    final systemPrompt = '''
+$_systemPromptPrefix
+
+IMPORTANT PREFERENCES:
+- The user's preferred language is $languagePreference. Respond primarily in this language unless the user asks otherwise.
+- The user's preferred currency is $currencyPreference. When quoting prices from the catalog (which are in USD), convert and format them to $currencyPreference. Exchange rates: \$1 USD = 25,000 VND, \$1 USD = 0.93 EUR.
+
+CATALOG AND SHOP DATA:
+$catalogContext
+''';
+
     final messages = <Map<String, String>>[
       {
         'role': 'system',
-        'content': '$_systemPromptPrefix\n\n$catalogContext',
+        'content': systemPrompt,
       },
     ];
 

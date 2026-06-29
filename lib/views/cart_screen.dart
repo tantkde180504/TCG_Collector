@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../viewmodels/catalog_viewmodel.dart';
+import '../viewmodels/settings_viewmodel.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -61,6 +62,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final cartVM = context.watch<CartViewModel>();
+    final settingsVM = context.watch<SettingsViewModel>();
 
     if (cartVM.items.isEmpty) {
       return const Scaffold(
@@ -140,7 +142,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '\$${item.card.marketPrice.toStringAsFixed(2)}',
+                              settingsVM.formatPrice(item.card.marketPrice, isExact: true),
                               style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ],
@@ -154,6 +156,7 @@ class _CartScreenState extends State<CartScreen> {
                           IconButton(
                             icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
                             onPressed: () {
+                              settingsVM.triggerHaptic();
                               cartVM.removeFromCart(item.card.id);
                             },
                           ),
@@ -161,6 +164,7 @@ class _CartScreenState extends State<CartScreen> {
                             children: [
                               GestureDetector(
                                 onTap: () {
+                                  settingsVM.triggerHaptic();
                                   cartVM.updateQuantity(item.card.id, item.quantity - 1);
                                 },
                                 child: Container(
@@ -181,6 +185,7 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               GestureDetector(
                                 onTap: () {
+                                  settingsVM.triggerHaptic();
                                   cartVM.updateQuantity(item.card.id, item.quantity + 1);
                                 },
                                 child: Container(
@@ -276,19 +281,19 @@ class _CartScreenState extends State<CartScreen> {
               top: false,
               child: Column(
                 children: [
-                  _buildSummaryRow('Subtotal', '\$${cartVM.subtotal.toStringAsFixed(2)}'),
+                  _buildSummaryRow('Subtotal', settingsVM.formatPrice(cartVM.subtotal, isExact: true)),
                   if (cartVM.discountPercent > 0)
                     _buildSummaryRow(
                       'Discount (${(cartVM.discountPercent * 100).toStringAsFixed(0)}%)',
-                      '-\$${cartVM.discountAmount.toStringAsFixed(2)}',
+                      '-${settingsVM.formatPrice(cartVM.discountAmount, isExact: true)}',
                       valueColor: Colors.greenAccent,
                     ),
-                  _buildSummaryRow('Shipping Fee', cartVM.shippingCost == 0 ? 'FREE' : '\$${cartVM.shippingCost.toStringAsFixed(2)}'),
+                  _buildSummaryRow('Shipping Fee', cartVM.shippingCost == 0 ? 'FREE' : settingsVM.formatPrice(cartVM.shippingCost, isExact: true)),
                   const Divider(color: Colors.white12),
                   const SizedBox(height: 4),
                   _buildSummaryRow(
                     'Total Cost',
-                    '\$${cartVM.grandTotal.toStringAsFixed(2)}',
+                    settingsVM.formatPrice(cartVM.grandTotal, isExact: true),
                     isBold: true,
                     valueColor: Colors.amber,
                   ),
@@ -305,6 +310,7 @@ class _CartScreenState extends State<CartScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: () {
+                        settingsVM.triggerHaptic();
                         // Reset checkout to step 0 and push screen
                         cartVM.setCheckoutStep(0);
                         Navigator.of(context).push(

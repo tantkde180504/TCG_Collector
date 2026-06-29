@@ -33,6 +33,11 @@ service cloud.firestore {
       match /cart/{cardId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Cấu hình phân quyền cho addresses nằm trong users
+      match /addresses/{addressId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // 🔥 QUAN TRỌNG NHẤT: Cấp quyền cho tính năng collectionGroup('orders') của Admin

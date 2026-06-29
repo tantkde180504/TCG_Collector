@@ -276,7 +276,7 @@ class DatabaseService {
         attack_damage INTEGER,
         weakness TEXT,
         retreat_cost INTEGER,
-        stock_quantity INTEGER DEFAULT 0
+        stock_quantity INTEGER DEFAULT 50
       )
     ''');
 
@@ -316,7 +316,7 @@ class DatabaseService {
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       try {
-        await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 0');
+        await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 50');
         await db.execute('ALTER TABLE orders ADD COLUMN rating REAL');
         await db.execute('ALTER TABLE orders ADD COLUMN feedback TEXT');
       } catch (e) {
@@ -329,14 +329,21 @@ class DatabaseService {
   Future<void> cacheCards(List<PokemonCard> cards) async {
     if (cards.isEmpty) return;
 
-    // Save to SQLite
+    // Save to SQLite — preserve existing stock_quantity admin may have set
     final db = await database;
     if (db != null) {
-      final batch = db.batch();
       for (var card in cards) {
-        batch.insert('cards', card.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        // Check if the card already exists in SQLite
+        final existing = await db.query('cards', where: 'card_id = ?', whereArgs: [card.id], columns: ['stock_quantity']);
+        final existingStock = existing.isNotEmpty ? (existing.first['stock_quantity'] as int?) : null;
+
+        final map = card.toMap();
+        if (existingStock != null) {
+          // Card already exists → preserve its current stock_quantity, update everything else
+          map['stock_quantity'] = existingStock;
+        }
+        await db.insert('cards', map, conflictAlgorithm: ConflictAlgorithm.replace);
       }
-      await batch.commit();
     } else {
       for (var card in cards) {
         _fallbackCards.removeWhere((c) => c.id == card.id);
@@ -344,7 +351,7 @@ class DatabaseService {
       }
     }
 
-    // Save to Firestore for persistence
+    // Save to Firestore for persistence — do NOT overwrite stock_quantity (admin controls it)
     if (_isFirebaseInitialized && await _hasInternet()) {
       try {
         final collection = FirebaseFirestore.instance.collection('cards');
@@ -352,7 +359,7 @@ class DatabaseService {
         for (var card in cards) {
           final docRef = collection.doc(card.id);
           final map = card.toMap();
-          // Loại bỏ trường stock_quantity để không đè lên số lượng mà Admin đã set trên Firebase
+          // Remove stock_quantity so Firestore retains the admin-set value
           map.remove('stock_quantity');
           batch.set(docRef, map, SetOptions(merge: true));
         }
@@ -362,6 +369,7 @@ class DatabaseService {
       }
     }
   }
+
 
   Future<List<PokemonCard>> getCards() async {
     // Return local fallback immediately if needed
@@ -773,6 +781,51 @@ class DatabaseService {
     }
     return true;
   }
+
+  /// Admin: cập nhật số lượng tồn kho của một thẻ bài
+  Future<bool> updateCardStock(String cardId, int newQuantity) async {
+    // Update SQLite
+    final db = await database;
+    if (db != null) {
+      try {
+        await db.update(
+          'cards',
+          {'stock_quantity': newQuantity},
+          where: 'card_id = ?',
+          whereArgs: [cardId],
+        );
+      } catch (e) {
+        debugPrint('Failed to update stock in SQLite: $e');
+      }
+    }
+    // Update in-memory fallback
+    final idx = _fallbackCards.indexWhere((c) => c.id == cardId);
+    if (idx >= 0) {
+      final old = _fallbackCards[idx];
+      _fallbackCards[idx] = PokemonCard(
+        id: old.id, name: old.name, type: old.type, rarity: old.rarity,
+        marketPrice: old.marketPrice, priceHistory: old.priceHistory,
+        description: old.description, imageUrl: old.imageUrl, hp: old.hp,
+        attackName: old.attackName, attackDamage: old.attackDamage,
+        weakness: old.weakness, retreatCost: old.retreatCost,
+        stockQuantity: newQuantity,
+      );
+    }
+
+    // Update Firestore (only stock_quantity)
+    if (_isFirebaseInitialized && await _hasInternet()) {
+      try {
+        await FirebaseFirestore.instance.collection('cards').doc(cardId).update({
+          'stock_quantity': newQuantity,
+        });
+        return true;
+      } catch (e) {
+        debugPrint('Admin: Failed to update stock in Firestore: $e');
+      }
+    }
+    return true;
+  }
+
 
   // --- PUBLIC REVIEWS ---
   Future<void> savePublicReview({
