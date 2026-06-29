@@ -136,6 +136,23 @@ class PokemonCardWidget extends StatelessWidget {
                           ),
                         ),
                       ),
+                      // Stock tag (top left)
+                      Positioned(
+                        top: 2,
+                        left: 2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: card.stockQuantity > 0 ? Colors.green.shade800 : Colors.red.shade800,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.white24, width: 0.5),
+                          ),
+                          child: Text(
+                            card.stockQuantity > 0 ? 'Stock: ${card.stockQuantity}' : 'Out of Stock',
+                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -1,413 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../models/admin_user.dart';
 import '../../services/user_service.dart';
 
-class UserManagementTab extends StatefulWidget {
+class UserManagementTab extends StatelessWidget {
   const UserManagementTab({super.key});
 
   @override
-  State<UserManagementTab> createState() => _UserManagementTabState();
-}
-
-class _UserManagementTabState extends State<UserManagementTab> {
-  static const _pageSize = 20;
-
-  List<AdminUser> _allUsers = [];
-  Map<String, UserOrderStats> _orderStats = {};
-  final Set<String> _selectedUids = {};
-  bool _isLoading = true;
-
-  String _searchQuery = '';
-  UserRoleFilter _roleFilter = UserRoleFilter.all;
-  UserEmailFilter _emailFilter = UserEmailFilter.all;
-  UserStatusFilter _statusFilter = UserStatusFilter.all;
-  UserSortOption _sortOption = UserSortOption.newest;
-  int _currentPage = 0;
-
-  final _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    final users = await UserService.instance.getAllAdminUsers();
-    final stats = await UserService.instance.getAllUserOrderStats();
-    if (!mounted) return;
-    setState(() {
-      _allUsers = users;
-      _orderStats = stats;
-      _isLoading = false;
-      _currentPage = 0;
-      _selectedUids.clear();
-    });
-  }
-
-  String _removeDiacritics(String str) {
-    var withDiacritics = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
-    var withoutDiacritics = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyydAAAAAAAAAAAAAAAAAEEEEEEEEEEEIIIIIOOOOOOOOOOOOOOOOOUUUUUUUUUUUYYYYYD';
-    for (int i = 0; i < withDiacritics.length; i++) {
-      str = str.replaceAll(withDiacritics[i], withoutDiacritics[i]);
-    }
-    return str;
-  }
-
-  List<AdminUser> get _filteredUsers {
-    var users = List<AdminUser>.from(_allUsers);
-
-    final query = _removeDiacritics(_searchQuery.trim().toLowerCase());
-    if (query.isNotEmpty) {
-      users = users.where((u) {
-        final nameUnsigned = _removeDiacritics(u.displayName.toLowerCase());
-        final emailUnsigned = _removeDiacritics(u.email.toLowerCase());
-        final uidUnsigned = _removeDiacritics(u.uid.toLowerCase());
-        return nameUnsigned.contains(query) ||
-            emailUnsigned.contains(query) ||
-            uidUnsigned.contains(query);
-      }).toList();
-    }
-
-    switch (_roleFilter) {
-      case UserRoleFilter.admin:
-        users = users.where((u) => u.isAdminRole).toList();
-        break;
-      case UserRoleFilter.staff:
-        users = users.where((u) => u.isStaffRole).toList();
-        break;
-      case UserRoleFilter.customer:
-        users = users.where((u) => u.isCustomerRole).toList();
-        break;
-      case UserRoleFilter.all:
-        break;
-    }
-
-    switch (_emailFilter) {
-      case UserEmailFilter.verified:
-        users = users.where((u) => u.emailVerified).toList();
-        break;
-      case UserEmailFilter.unverified:
-        users = users.where((u) => !u.emailVerified).toList();
-        break;
-      case UserEmailFilter.all:
-        break;
-    }
-
-    switch (_statusFilter) {
-      case UserStatusFilter.active:
-        users = users.where((u) => !u.isDisabled).toList();
-        break;
-      case UserStatusFilter.disabled:
-        users = users.where((u) => u.isDisabled).toList();
-        break;
-      case UserStatusFilter.all:
-        break;
-    }
-
-    users.sort((a, b) {
-      switch (_sortOption) {
-        case UserSortOption.nameAsc:
-          return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
-        case UserSortOption.newest:
-          return _dateOrMin(b.createdAt).compareTo(_dateOrMin(a.createdAt));
-        case UserSortOption.oldest:
-          return _dateOrMin(a.createdAt).compareTo(_dateOrMin(b.createdAt));
-        case UserSortOption.lastLogin:
-          return _dateOrMin(b.lastLoginAt).compareTo(_dateOrMin(a.lastLoginAt));
-      }
-    });
-
-    return users;
-  }
-
-  DateTime _dateOrMin(DateTime? date) => date ?? DateTime.fromMillisecondsSinceEpoch(0);
-
-  int get _totalPages {
-    final count = _filteredUsers.length;
-    if (count == 0) return 1;
-    return (count / _pageSize).ceil();
-  }
-
-  List<AdminUser> get _pagedUsers {
-    final filtered = _filteredUsers;
-    final start = _currentPage * _pageSize;
-    if (start >= filtered.length) return [];
-    final end = (start + _pageSize).clamp(0, filtered.length);
-    return filtered.sublist(start, end);
-  }
-
-  int get _newThisMonth {
-    final now = DateTime.now();
-    return _allUsers.where((u) {
-      final created = u.createdAt;
-      return created != null &&
-          created.year == now.year &&
-          created.month == now.month;
-    }).length;
-  }
-
-  void _snack(String message, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red.shade800 : null,
-      ),
-    );
-  }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return '—';
-    return DateFormat('yyyy-MM-dd HH:mm').format(date);
-  }
-
-  String _formatRelative(DateTime? date) {
-    if (date == null) return '—';
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays > 0) return '${diff.inDays} ngày trước';
-    if (diff.inHours > 0) return '${diff.inHours} giờ trước';
-    if (diff.inMinutes > 0) return '${diff.inMinutes} phút trước';
-    return 'Vừa xong';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final filtered = _filteredUsers;
-    final paged = _pagedUsers;
-    final startIndex = filtered.isEmpty ? 0 : _currentPage * _pageSize + 1;
-    final endIndex = (_currentPage * _pageSize + paged.length).clamp(0, filtered.length);
-
-    return Column(
-      children: [
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadData,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              children: [
-                _buildStatsRow(),
-                const SizedBox(height: 16),
-                _buildSearchBar(),
-                const SizedBox(height: 12),
-                _buildFilterRow(),
-                const SizedBox(height: 12),
-                _buildSortRow(),
-                if (_selectedUids.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _buildBulkActionBar(),
-                ],
-                const SizedBox(height: 16),
-                if (filtered.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: Text('Không tìm thấy người dùng nào.')),
-                  )
-                else
-                  ...paged.map(_buildUserCard),
-              ],
-            ),
-          ),
-        ),
-        if (filtered.isNotEmpty) _buildPagination(startIndex, endIndex, filtered.length),
-      ],
-    );
-  }
-
-  Widget _buildStatsRow() {
-    final total = _allUsers.length;
-    final admins = _allUsers.where((u) => u.isAdminRole).length;
-    final customers = _allUsers.where((u) => u.isCustomerRole).length;
-    final banned = _allUsers.where((u) => u.isDisabled).length;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Tính toán aspect ratio tự động theo chiều rộng
-        final cellWidth = (constraints.maxWidth - 16 * 2 - 12 * 2) / 3;
-        final cellHeight = cellWidth * 0.55;
-        final aspectRatio = cellWidth / cellHeight;
-        final pad = constraints.maxWidth * 0.04;
-
-        return Container(
-          padding: EdgeInsets.all(pad),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(pad),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'TÓM TẮT NGƯỜI DÙNG',
-                style: TextStyle(
-                  fontSize: (constraints.maxWidth * 0.03).clamp(10.0, 14.0),
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amber,
-                  letterSpacing: 1.2,
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: UserService.instance.getAllUsers(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final users = snapshot.data ?? [];
+        if (users.isEmpty) return const Center(child: Text('Chưa có người dùng nào.'));
+        
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: users.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final user = users[index];
+            return Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.amber,
+                  child: Icon(Icons.person, color: Colors.black),
+                ),
+                title: Text(user['display_name'] ?? 'Trainer', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(user['email'] ?? 'No email'),
+                    Text('UID: ${user['uid']}', style: const TextStyle(fontSize: 10, color: Colors.white38)),
+                  ],
                 ),
               ),
-              SizedBox(height: pad),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: constraints.maxWidth * 0.03,
-                crossAxisSpacing: constraints.maxWidth * 0.03,
-                childAspectRatio: aspectRatio,
-                children: [
-                  _statItem('Users', total.toString(), Colors.amber, constraints),
-                  _statItem('Admins', admins.toString(), Colors.orange, constraints),
-                  _statItem('Customers', customers.toString(), Colors.blueAccent, constraints),
-                  _statItem('Banned', banned.toString(), Colors.redAccent, constraints),
-                  _statItem('New (month)', _newThisMonth.toString(), Colors.greenAccent, constraints),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-
-  Widget _statItem(String label, String value, Color color, BoxConstraints constraints) {
-    final dotSize = (constraints.maxWidth * 0.02).clamp(6.0, 10.0);
-    final labelFontSize = (constraints.maxWidth * 0.028).clamp(9.0, 13.0);
-    final valueFontSize = (constraints.maxWidth * 0.045).clamp(14.0, 22.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: dotSize,
-              height: dotSize,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            SizedBox(width: dotSize),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(color: Colors.white54, fontSize: labelFontSize),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: constraints.maxWidth * 0.01),
-        Text(
-          value,
-          style: TextStyle(fontSize: valueFontSize, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return TextField(
-      controller: _searchController,
-      decoration: InputDecoration(
-        hintText: 'Tìm theo tên, email, UID...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: _searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {
-                    _searchQuery = '';
-                    _currentPage = 0;
-                  });
-                },
-              )
-            : null,
-        filled: true,
-        fillColor: const Color(0xFF1E1E1E),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      onChanged: (value) => setState(() {
-        _searchQuery = value;
-        _currentPage = 0;
-      }),
-    );
-  }
-
-  Widget _buildFilterRow() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final itemWidth = (constraints.maxWidth - 16) / 3;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            SizedBox(
-              width: itemWidth,
-              child: _filterDropdown<UserRoleFilter>(
-                label: 'Role',
-                value: _roleFilter,
-                items: const {
-                  UserRoleFilter.all: 'Tất cả',
-                  UserRoleFilter.admin: 'Admin',
-                  UserRoleFilter.staff: 'Staff',
-                  UserRoleFilter.customer: 'Customer',
-                },
-                onChanged: (v) => setState(() {
-                  _roleFilter = v;
-                  _currentPage = 0;
-                }),
-              ),
-            ),
-            SizedBox(
-              width: itemWidth,
-              child: _filterDropdown<UserEmailFilter>(
-                label: 'Email',
-                value: _emailFilter,
-                items: const {
-                  UserEmailFilter.all: 'Tất cả',
-                  UserEmailFilter.verified: 'Đã xác thực',
-                  UserEmailFilter.unverified: 'Chưa xác thực',
-                },
-                onChanged: (v) => setState(() {
-                  _emailFilter = v;
-                  _currentPage = 0;
-                }),
-              ),
-            ),
-            SizedBox(
-              width: itemWidth,
-              child: _filterDropdown<UserStatusFilter>(
-                label: 'Trạng thái',
-                value: _statusFilter,
-                items: const {
-                  UserStatusFilter.all: 'Tất cả',
-                  UserStatusFilter.active: 'Hoạt động',
-                  UserStatusFilter.disabled: 'Bị khóa',
-                },
-                onChanged: (v) => setState(() {
-                  _statusFilter = v;
-                  _currentPage = 0;
-                }),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );

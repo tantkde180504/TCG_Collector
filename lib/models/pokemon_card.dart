@@ -12,7 +12,7 @@ class PokemonCard {
   final int attackDamage;
   final String weakness;
   final int retreatCost;
-  final int stockQuantity; // Số lượng card còn trong kho
+  final int stockQuantity;
 
   PokemonCard({
     required this.id,
@@ -100,8 +100,7 @@ class PokemonCard {
       attackDamage: map['attack_damage'] ?? 0,
       weakness: map['weakness'] ?? 'None',
       retreatCost: map['retreat_cost'] ?? 1,
-      stockQuantity: (map['stock_quantity'] as num?)?.toInt() ?? 0,
+      stockQuantity: map['stock_quantity'] ?? 0,
     );
-
   }
 }
