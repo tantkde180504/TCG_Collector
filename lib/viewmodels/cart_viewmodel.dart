@@ -268,37 +268,6 @@ class CartViewModel extends ChangeNotifier {
     try {
       final status = await PayosService.getPaymentStatus(orderCode);
       if (status != 'PAID') {
-      if (status == 'PAID') {
-        // Find order in local cache and update
-        final index = _orders.indexWhere((o) => o.orderId == orderId);
-        if (index >= 0) {
-          final updatedOrder = OrderItem(
-            orderId: _orders[index].orderId,
-            userId: _orders[index].userId,
-            items: _orders[index].items,
-            totalAmount: _orders[index].totalAmount,
-            status: 'Processing',
-            timestamp: _orders[index].timestamp,
-            shippingAddress: _orders[index].shippingAddress,
-            paymentMethod: _orders[index].paymentMethod,
-          );
-          
-          await _db.saveOrder(updatedOrder);
-          _orders[index] = updatedOrder;
-          
-          // Clear cart now that payment is confirmed
-          await clearCart();
-          
-          // Reset coupon discount
-          _appliedCoupon = '';
-          _discountPercent = 0.0;
-
-          LocalNotificationService.showOrderNotification(
-            title: 'Payment Successful',
-            body: 'Your payment for order $orderId has been verified!',
-          );
-        }
-        
         _isLoading = false;
         notifyListeners();
         return false;
@@ -323,7 +292,7 @@ class CartViewModel extends ChangeNotifier {
         userId: existing.userId,
         items: existing.items,
         totalAmount: existing.totalAmount,
-        status: 'Paid',
+        status: 'Processing',
         timestamp: existing.timestamp,
         shippingAddress: existing.shippingAddress,
         paymentMethod: existing.paymentMethod,
@@ -342,6 +311,11 @@ class CartViewModel extends ChangeNotifier {
         _appliedCoupon = '';
         _discountPercent = 0.0;
       }
+
+      LocalNotificationService.showOrderNotification(
+        title: 'Payment Successful',
+        body: 'Your payment for order $orderId has been verified!',
+      );
 
       _isLoading = false;
       notifyListeners();

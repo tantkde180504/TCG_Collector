@@ -225,8 +225,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -245,7 +246,8 @@ class DatabaseService {
         attack_name TEXT,
         attack_damage INTEGER,
         weakness TEXT,
-        retreat_cost INTEGER
+        retreat_cost INTEGER,
+        stock_quantity INTEGER DEFAULT 0
       )
     ''');
 
@@ -278,6 +280,12 @@ class DatabaseService {
         timestamp TEXT NOT NULL
       )
     ''');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 0');
+    }
   }
 
   // --- CARDS CATALOG ---
