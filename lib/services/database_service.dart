@@ -261,12 +261,12 @@ class DatabaseService {
           try {
             await db.execute('ALTER TABLE orders ADD COLUMN rating REAL');
             await db.execute('ALTER TABLE orders ADD COLUMN feedback TEXT');
+            await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 0');
           } catch (e) {
             debugPrint('Error upgrading database: $e');
           }
         }
       },
-      onUpgrade: _upgradeDB,
     );
   }
 
@@ -321,12 +321,6 @@ class DatabaseService {
         timestamp TEXT NOT NULL
       )
     ''');
-  }
-
-  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE cards ADD COLUMN stock_quantity INTEGER DEFAULT 0');
-    }
   }
 
   // --- CARDS CATALOG ---
@@ -742,7 +736,7 @@ class DatabaseService {
     
     return FirebaseFirestore.instance
         .collection('reviews')
-        .where('card_id', ==: cardId)
+        .where('card_id', isEqualTo: cardId)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
