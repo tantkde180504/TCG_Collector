@@ -46,7 +46,34 @@ class ProductManagementTab extends StatelessWidget {
                     ),
                   ),
                   title: Text(card.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('${card.type} - ${card.marketPrice} PG'),
+                  subtitle: Row(
+                    children: [
+                      Text('${card.type} - ${card.marketPrice} PG'),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: card.stockQuantity > 5
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : card.stockQuantity > 0
+                                  ? Colors.orange.withValues(alpha: 0.2)
+                                  : Colors.red.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Kho: ${card.stockQuantity}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: card.stockQuantity > 5
+                                ? Colors.greenAccent
+                                : card.stockQuantity > 0
+                                    ? Colors.orangeAccent
+                                    : Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -78,6 +105,7 @@ class ProductManagementTab extends StatelessWidget {
     final imageController = TextEditingController(text: card?.imageUrl);
     final hpController = TextEditingController(text: (card?.hp ?? 100).toString());
     final descController = TextEditingController(text: card?.description);
+    final stockController = TextEditingController(text: (card?.stockQuantity ?? 0).toString());
 
     showDialog(
       context: context,
@@ -93,6 +121,14 @@ class ProductManagementTab extends StatelessWidget {
               TextField(controller: typeController, decoration: const InputDecoration(labelText: 'Hệ (Type)')),
               TextField(controller: rarityController, decoration: const InputDecoration(labelText: 'Độ hiếm (Rarity)')),
               TextField(controller: hpController, decoration: const InputDecoration(labelText: 'HP'), keyboardType: TextInputType.number),
+              TextField(
+                controller: stockController,
+                decoration: const InputDecoration(
+                  labelText: 'Số lượng trong kho',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                ),
+                keyboardType: TextInputType.number,
+              ),
               TextField(controller: imageController, decoration: const InputDecoration(labelText: 'URL Ảnh')),
               TextField(controller: descController, decoration: const InputDecoration(labelText: 'Mô tả'), maxLines: 3),
             ],
@@ -118,6 +154,7 @@ class ProductManagementTab extends StatelessWidget {
                 attackDamage: card?.attackDamage ?? 50,
                 weakness: card?.weakness ?? 'None',
                 retreatCost: card?.retreatCost ?? 1,
+                stockQuantity: int.tryParse(stockController.text) ?? 0,
               );
 
               await DatabaseService.instance.cacheCards([newCard]);
