@@ -88,9 +88,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     
     Color statusColor;
     switch (order.status.toLowerCase()) {
-      case 'paid':
-        statusColor = Colors.green;
-        break;
       case 'processing':
         statusColor = Colors.orange;
         break;
@@ -351,6 +348,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
                       _buildReceiptSummary(currentOrder, subtotal, shipping, discount),
                       const SizedBox(height: 24),
+
+                      if (currentOrder.status.toLowerCase() == 'delivered') ...[
+                        const Divider(color: Color(0xFF333333), height: 32),
+                        _buildFeedbackSection(context, currentOrder),
+                        const SizedBox(height: 24),
+                      ],
                     ],
                   ),
                 );
@@ -365,9 +368,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   Widget _buildStatusBadge(String status) {
     Color statusColor;
     switch (status.toLowerCase()) {
-      case 'paid':
-        statusColor = Colors.green;
-        break;
       case 'processing':
         statusColor = Colors.orange;
         break;
@@ -402,10 +402,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final lowerStatus = status.toLowerCase();
 
     bool isUnpaid = lowerStatus == 'unpaid';
-    bool isProcessing = lowerStatus == 'paid' ||
-        lowerStatus == 'processing' ||
-        lowerStatus == 'shipped' ||
-        lowerStatus == 'delivered';
+    bool isProcessing = lowerStatus == 'processing' || lowerStatus == 'shipped' || lowerStatus == 'delivered';
     bool isShipped = lowerStatus == 'shipped' || lowerStatus == 'delivered';
     bool isDelivered = lowerStatus == 'delivered';
 
@@ -424,10 +421,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         _buildTimelineStep(
           icon: isUnpaid ? Icons.circle_outlined : Icons.check_circle_rounded,
           color: isUnpaid ? Colors.white24 : Colors.green,
-          title: lowerStatus == 'paid' ? 'Payment Confirmed' : 'Order Placed',
-          subtitle: lowerStatus == 'paid'
-              ? 'PayOS transaction verified successfully'
-              : 'Invoice created successfully',
+          title: 'Order Placed',
+          subtitle: 'Invoice created successfully',
           isLast: false,
         ),
         _buildTimelineDivider(isProcessing),
@@ -760,6 +755,128 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFeedbackSection(BuildContext context, OrderItem order) {
+    if (order.rating != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your Feedback',
+            style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2C2C2C),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < (order.rating ?? 0) ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: Colors.amber,
+                      size: 20,
+                    );
+                  }),
+                ),
+                if (order.feedback != null && order.feedback!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    order.feedback!,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    double localRating = 5;
+    final feedbackController = TextEditingController();
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Rate your order',
+              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2C),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return IconButton(
+                        onPressed: () => setState(() => localRating = index + 1.0),
+                        icon: Icon(
+                          index < localRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: Colors.amber,
+                          size: 32,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: feedbackController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Share your thoughts (optional)',
+                      hintStyle: const TextStyle(color: Colors.white24),
+                      filled: true,
+                      fillColor: const Color(0xFF1E1E1E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final authVM = context.read<AuthViewModel>();
+                        await context.read<CartViewModel>().submitFeedback(
+                          order.orderId,
+                          localRating,
+                          feedbackController.text.trim(),
+                          authVM.displayName,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Feedback submitted! Thank you!')),
+                          );
+                        }
+                      },
+                      child: const Text('SUBMIT FEEDBACK'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

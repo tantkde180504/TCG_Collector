@@ -5,6 +5,7 @@ import '../viewmodels/cart_viewmodel.dart';
 import '../widgets/price_chart.dart';
 import '../widgets/three_d_card.dart';
 import '../services/tcg_price_service.dart';
+import '../services/database_service.dart';
 
 class DetailScreen extends StatefulWidget {
   final PokemonCard card;
@@ -437,6 +438,14 @@ class _DetailScreenState extends State<DetailScreen> {
                 isLoading: _isPriceLoading,
               ),
             ),
+            const SizedBox(height: 24),
+
+            // Public Reviews Section
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildReviewsList(),
+            ),
+            
             const SizedBox(height: 120),
           ],
         ),
@@ -527,6 +536,98 @@ class _DetailScreenState extends State<DetailScreen> {
         Text(
           value,
           style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewsList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Trainer Reviews',
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        StreamBuilder<List<Map<String, dynamic>>>(
+          stream: DatabaseService.instance.getCardReviews(widget.card.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Colors.amber));
+            }
+
+            final reviews = snapshot.data ?? [];
+
+            if (reviews.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Text(
+                    'No reviews yet for this card. Be the first to buy and review!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white38, fontSize: 13, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              );
+            }
+
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: reviews.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final review = reviews[index];
+                final double rating = (review['rating'] as num?)?.toDouble() ?? 5.0;
+                final String name = review['user_name'] ?? 'Anonymous Trainer';
+                final String feedback = review['feedback'] ?? '';
+                
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Row(
+                            children: List.generate(5, (starIndex) {
+                              return Icon(
+                                starIndex < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                                color: Colors.amber,
+                                size: 14,
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                      if (feedback.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          feedback,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
         ),
       ],
     );

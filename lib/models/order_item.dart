@@ -11,6 +11,8 @@ class OrderItem {
   final DateTime timestamp;
   final String shippingAddress;
   final String paymentMethod;
+  final double? rating;
+  final String? feedback;
 
   OrderItem({
     required this.orderId,
@@ -21,6 +23,8 @@ class OrderItem {
     required this.timestamp,
     required this.shippingAddress,
     required this.paymentMethod,
+    this.rating,
+    this.feedback,
   });
 
   Map<String, dynamic> toMap() {
@@ -42,6 +46,8 @@ class OrderItem {
       'timestamp': timestamp.toIso8601String(),
       'shipping_address': shippingAddress,
       'payment_method': paymentMethod,
+      'rating': rating,
+      'feedback': feedback,
     };
   }
 
@@ -87,6 +93,8 @@ class OrderItem {
       timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
       shippingAddress: map['shipping_address'] ?? '',
       paymentMethod: map['payment_method'] ?? 'PokeGold',
+      rating: (map['rating'] as num?)?.toDouble(),
+      feedback: map['feedback'],
     );
   }
 }
