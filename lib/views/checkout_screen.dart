@@ -5,6 +5,7 @@ import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/cart_viewmodel.dart';
 import '../viewmodels/notification_viewmodel.dart';
 import '../widgets/payos_widgets.dart';
+import '../services/user_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -30,9 +31,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
     final cartVM = context.read<CartViewModel>();
-    _nameController.text = cartVM.shippingName;
-    _phoneController.text = cartVM.shippingPhone;
-    _addressController.text = cartVM.shippingAddress;
+    final authVM = context.read<AuthViewModel>();
+    
+    if (cartVM.shippingName.isNotEmpty || cartVM.shippingPhone.isNotEmpty || cartVM.shippingAddress.isNotEmpty) {
+      _nameController.text = cartVM.shippingName;
+      _phoneController.text = cartVM.shippingPhone;
+      _addressController.text = cartVM.shippingAddress;
+    } else {
+      _loadDefaultAddress(authVM.userId, authVM.displayName);
+    }
+  }
+
+  Future<void> _loadDefaultAddress(String userId, String defaultName) async {
+    final addresses = await UserService.instance.getAddresses(userId);
+    if (!mounted) return;
+    if (addresses.isNotEmpty) {
+      UserAddress? def;
+      try {
+        def = addresses.firstWhere((a) => a.isDefault);
+      } catch (_) {
+        def = addresses.first;
+      }
+      
+      setState(() {
+        _nameController.text = def!.fullName.isNotEmpty ? def.fullName : defaultName;
+        _phoneController.text = def.phoneNumber;
+        _addressController.text = '${def.street}, ${def.city}, ${def.country}';
+      });
+    }
+  }
+
+  void _showAddressBook() async {
+    final authVM = context.read<AuthViewModel>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _CheckoutAddressBookSheet(
+        userId: authVM.userId,
+        onSelect: (addr) {
+          setState(() {
+            _nameController.text = addr.fullName.isNotEmpty ? addr.fullName : authVM.displayName;
+            _phoneController.text = addr.phoneNumber;
+            _addressController.text = '${addr.street}, ${addr.city}, ${addr.country}';
+          });
+          Navigator.pop(ctx);
+        },
+      ),
+    );
   }
 
   @override
@@ -267,9 +313,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Shipping Information',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Shipping Information',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              TextButton.icon(
+                onPressed: _showAddressBook,
+                icon: const Icon(Icons.import_contacts_rounded, size: 16),
+                label: const Text('Address Book', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.amber,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           // Full name input
@@ -635,3 +697,122 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 }
+
+class _CheckoutAddressBookSheet extends StatefulWidget {
+  final String userId;
+  final void Function(UserAddress) onSelect;
+  const _CheckoutAddressBookSheet({required this.userId, required this.onSelect});
+
+  @override
+  State<_CheckoutAddressBookSheet> createState() => _CheckoutAddressBookSheetState();
+}
+
+class _CheckoutAddressBookSheetState extends State<_CheckoutAddressBookSheet> {
+  List<UserAddress> _addresses = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final res = await UserService.instance.getAddresses(widget.userId);
+    if (!mounted) return;
+    setState(() {
+      _addresses = res;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      builder: (_, ctrl) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 4),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Row(
+                children: [
+                  Icon(Icons.import_contacts_rounded, color: Colors.amber),
+                  SizedBox(width: 12),
+                  Text('Select Address', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+                  : _addresses.isEmpty
+                      ? const Center(child: Text('No saved addresses.', style: TextStyle(color: Colors.white54)))
+                      : ListView.separated(
+                          controller: ctrl,
+                          padding: const EdgeInsets.all(20),
+                          itemCount: _addresses.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final addr = _addresses[i];
+                            return InkWell(
+                              onTap: () => widget.onSelect(addr),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF242424),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: addr.isDefault ? Colors.amber : Colors.white12, width: addr.isDefault ? 1.5 : 1),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(addr.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                        if (addr.isDefault) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+                                            child: const Text('Default', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    if (addr.fullName.isNotEmpty || addr.phoneNumber.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text([if (addr.fullName.isNotEmpty) addr.fullName, if (addr.phoneNumber.isNotEmpty) addr.phoneNumber].join(' - '), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    ],
+                                    const SizedBox(height: 6),
+                                    Text('${addr.street}, ${addr.city}, ${addr.country}', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

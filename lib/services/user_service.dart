@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 class UserAddress {
   final String id;
   final String label;
+  final String fullName;
+  final String phoneNumber;
   final String street;
   final String city;
   final String country;
@@ -16,6 +18,8 @@ class UserAddress {
   const UserAddress({
     required this.id,
     required this.label,
+    this.fullName = '',
+    this.phoneNumber = '',
     required this.street,
     required this.city,
     required this.country,
@@ -24,6 +28,8 @@ class UserAddress {
 
   Map<String, dynamic> toMap() => {
         'label': label,
+        'fullName': fullName,
+        'phoneNumber': phoneNumber,
         'street': street,
         'city': city,
         'country': country,
@@ -34,6 +40,8 @@ class UserAddress {
       UserAddress(
         id: id,
         label: map['label'] ?? '',
+        fullName: map['fullName'] ?? '',
+        phoneNumber: map['phoneNumber'] ?? '',
         street: map['street'] ?? '',
         city: map['city'] ?? '',
         country: map['country'] ?? 'Vietnam',
@@ -42,6 +50,8 @@ class UserAddress {
 
   UserAddress copyWith({
     String? label,
+    String? fullName,
+    String? phoneNumber,
     String? street,
     String? city,
     String? country,
@@ -50,6 +60,8 @@ class UserAddress {
       UserAddress(
         id: id,
         label: label ?? this.label,
+        fullName: fullName ?? this.fullName,
+        phoneNumber: phoneNumber ?? this.phoneNumber,
         street: street ?? this.street,
         city: city ?? this.city,
         country: country ?? this.country,
