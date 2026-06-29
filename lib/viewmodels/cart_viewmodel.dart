@@ -254,7 +254,11 @@ class CartViewModel extends ChangeNotifier {
     }
   }
 
-  Future<bool> verifyPayOSPayment(String orderId) async {
+  Future<bool> verifyPayOSPayment(
+    String orderId, {
+    bool clearCartAfter = true,
+    List<PokemonCard>? catalog,
+  }) async {
     final orderCode = int.tryParse(orderId);
     if (orderCode == null) return false;
 
@@ -263,6 +267,7 @@ class CartViewModel extends ChangeNotifier {
 
     try {
       final status = await PayosService.getPaymentStatus(orderCode);
+      if (status != 'PAID') {
       if (status == 'PAID') {
         // Find order in local cache and update
         final index = _orders.indexWhere((o) => o.orderId == orderId);
@@ -296,10 +301,121 @@ class CartViewModel extends ChangeNotifier {
         
         _isLoading = false;
         notifyListeners();
+        return false;
+      }
+
+      OrderItem? existing;
+      final cacheIndex = _orders.indexWhere((o) => o.orderId == orderId);
+      if (cacheIndex >= 0) {
+        existing = _orders[cacheIndex];
+      } else if (catalog != null) {
+        existing = await _db.getOrderById(orderId, catalog);
+      }
+
+      if (existing == null) {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final updatedOrder = OrderItem(
+        orderId: existing.orderId,
+        userId: existing.userId,
+        items: existing.items,
+        totalAmount: existing.totalAmount,
+        status: 'Paid',
+        timestamp: existing.timestamp,
+        shippingAddress: existing.shippingAddress,
+        paymentMethod: existing.paymentMethod,
+      );
+
+      await _db.saveOrder(updatedOrder);
+
+      if (cacheIndex >= 0) {
+        _orders[cacheIndex] = updatedOrder;
+      } else {
+        _orders.insert(0, updatedOrder);
+      }
+
+      if (clearCartAfter) {
+        await clearCart();
+        _appliedCoupon = '';
+        _discountPercent = 0.0;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error verifying PayOS payment: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<void> refreshUnpaidPayOSOrders(List<PokemonCard> catalog) async {
+    for (final order in List<OrderItem>.from(_orders)) {
+      if (order.status.toLowerCase() == 'unpaid' && order.paymentMethod == 'PayOS') {
+        await verifyPayOSPayment(
+          order.orderId,
+          clearCartAfter: false,
+          catalog: catalog,
+        );
+      }
+    }
+  }
+
+  Future<bool> regeneratePayOSLink(OrderItem order) async {
+    final int? orderCode = int.tryParse(order.orderId);
+    if (orderCode == null) return false;
+
+    _isLoading = true;
+    _lastCheckoutUrl = null;
+    _lastPayOSData = null;
+    notifyListeners();
+
+    try {
+      final int amountVnd = (order.totalAmount * 25000).round();
+      final List<Map<String, dynamic>> payosItems = order.items.map((it) => {
+        'name': it.card.name,
+        'quantity': it.quantity,
+        'price': (it.card.marketPrice * 25000).round(),
+      }).toList();
+
+      String cancelUrl = 'https://tcgcollector.com/cancel';
+      String returnUrl = 'https://tcgcollector.com/success';
+      
+      if (kIsWeb) {
+        try {
+          final origin = Uri.base.origin;
+          cancelUrl = '$origin/#/checkout?status=cancel';
+          returnUrl = '$origin/#/checkout?status=success';
+        } catch (_) {}
+      } else {
+        cancelUrl = 'tcgcollector://payment-cancel';
+        returnUrl = 'tcgcollector://payment-success';
+      }
+
+      final res = await PayosService.createPaymentLink(
+        orderCode: orderCode,
+        amount: amountVnd,
+        description: 'TCG Order $orderCode',
+        cancelUrl: cancelUrl,
+        returnUrl: returnUrl,
+        items: payosItems,
+      );
+
+      if (res != null) {
+        _lastPayOSData = res;
+        _lastCheckoutUrl = res['checkoutUrl'];
+        _isLoading = false;
+        notifyListeners();
         return true;
       }
     } catch (e) {
-      debugPrint('Error verifying PayOS payment: $e');
+      debugPrint('Error regenerating PayOS link: $e');
     }
 
     _isLoading = false;
@@ -312,8 +428,14 @@ class CartViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final allOrders = await _db.getOrders(catalog);
-      // Filter orders for active user
+      await _db.syncOrdersFromCloud();
+
+      var allOrders = await _db.getOrders(catalog);
+      _orders = allOrders.where((o) => o.userId == userId).toList();
+
+      await refreshUnpaidPayOSOrders(catalog);
+
+      allOrders = await _db.getOrders(catalog);
       _orders = allOrders.where((o) => o.userId == userId).toList();
     } catch (e) {
       debugPrint('Error loading orders: $e');

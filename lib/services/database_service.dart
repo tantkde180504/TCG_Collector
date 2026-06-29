@@ -167,35 +167,55 @@ class DatabaseService {
         }
       }
       
-      // 2. Sync Orders
-      final ordersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('orders')
-          .get();
-          
-      if (db != null) {
-        for (var doc in ordersSnapshot.docs) {
-          final data = doc.data();
-          final dbMap = Map<String, dynamic>.from(data);
-          dbMap.remove('sync_timestamp');
-          dbMap.remove('orderCode');
-          await db.insert('orders', dbMap, conflictAlgorithm: ConflictAlgorithm.replace);
-        }
-      } else {
-        for (var doc in ordersSnapshot.docs) {
-          final data = doc.data();
-          final dbMap = Map<String, dynamic>.from(data);
-          dbMap.remove('sync_timestamp');
-          dbMap.remove('orderCode');
-          final exists = _fallbackOrders.any((o) => o['order_id'] == doc.id);
-          if (!exists) {
-            _fallbackOrders.add(dbMap);
-          }
-        }
-      }
+      await _mergeOrdersFromCloud(userId, db);
     } catch (e) {
       debugPrint('Failed to sync from cloud on login: $e');
+    }
+  }
+
+  Future<void> syncOrdersFromCloud() async {
+    if (!_isFirebaseInitialized) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || !await _hasInternet()) return;
+
+    try {
+      final db = await database;
+      await _mergeOrdersFromCloud(user.uid, db);
+    } catch (e) {
+      debugPrint('Failed to sync orders from cloud: $e');
+    }
+  }
+
+  Future<void> _mergeOrdersFromCloud(String firebaseUid, Database? db) async {
+    final ordersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(firebaseUid)
+        .collection('orders')
+        .get();
+
+    for (var doc in ordersSnapshot.docs) {
+      final data = doc.data();
+      final dbMap = Map<String, dynamic>.from(data);
+      dbMap.remove('sync_timestamp');
+      dbMap.remove('orderCode');
+
+      if (db != null) {
+        await db.insert('orders', dbMap, conflictAlgorithm: ConflictAlgorithm.replace);
+      } else {
+        _upsertFallbackOrder(dbMap);
+      }
+    }
+  }
+
+  void _upsertFallbackOrder(Map<String, dynamic> orderMap) {
+    final orderId = orderMap['order_id'] as String?;
+    if (orderId == null) return;
+
+    final index = _fallbackOrders.indexWhere((o) => o['order_id'] == orderId);
+    if (index >= 0) {
+      _fallbackOrders[index] = orderMap;
+    } else {
+      _fallbackOrders.add(orderMap);
     }
   }
 
@@ -485,25 +505,47 @@ class DatabaseService {
   }
 
   // --- ORDER HISTORY ---
+  List<OrderItem> _dedupeOrders(List<OrderItem> orders) {
+    final byId = <String, OrderItem>{};
+    for (final order in orders) {
+      byId[order.orderId] = order;
+    }
+    final deduped = byId.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return deduped;
+  }
+
   Future<List<OrderItem>> getOrders(List<PokemonCard> catalog) async {
     final db = await database;
     if (_useFallback || db == null) {
-      return _fallbackOrders.map((m) => OrderItem.fromMap(m, catalog)).toList();
+      return _dedupeOrders(
+        _fallbackOrders.map((m) => OrderItem.fromMap(m, catalog)).toList(),
+      );
     }
 
     try {
       final List<Map<String, dynamic>> maps = await db.query('orders', orderBy: 'timestamp DESC');
-      return maps.map((m) => OrderItem.fromMap(m, catalog)).toList();
+      return _dedupeOrders(maps.map((m) => OrderItem.fromMap(m, catalog)).toList());
     } catch (e) {
       debugPrint('Failed query SQLite orders: $e');
-      return _fallbackOrders.map((m) => OrderItem.fromMap(m, catalog)).toList();
+      return _dedupeOrders(
+        _fallbackOrders.map((m) => OrderItem.fromMap(m, catalog)).toList(),
+      );
     }
+  }
+
+  Future<OrderItem?> getOrderById(String orderId, List<PokemonCard> catalog) async {
+    final orders = await getOrders(catalog);
+    for (final order in orders) {
+      if (order.orderId == orderId) return order;
+    }
+    return null;
   }
 
   Future<void> saveOrder(OrderItem order) async {
     final db = await database;
     if (_useFallback || db == null) {
-      _fallbackOrders.add(order.toMap());
+      _upsertFallbackOrder(order.toMap());
       await _syncOrderToCloud(order);
       return;
     }
@@ -513,7 +555,7 @@ class DatabaseService {
       await _syncOrderToCloud(order);
     } catch (e) {
       debugPrint('Failed save SQLite order: $e');
-      _fallbackOrders.add(order.toMap());
+      _upsertFallbackOrder(order.toMap());
       await _syncOrderToCloud(order);
     }
   }
