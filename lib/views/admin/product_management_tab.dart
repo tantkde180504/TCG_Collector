@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math';
 import '../../viewmodels/catalog_viewmodel.dart';
 import '../../services/database_service.dart';
 import '../../models/pokemon_card.dart';
