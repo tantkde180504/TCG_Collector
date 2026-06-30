@@ -57,6 +57,19 @@ class AuthViewModel extends ChangeNotifier {
     _checkLoginStatus();
   }
 
+  Future<void> _updateAdminStatus(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        final data = doc.data();
+        final role = data?['role']?.toString();
+        _isAdmin = data?['isAdmin'] == true || role == 'admin' || role == 'super_admin';
+      }
+    } catch (e) {
+      debugPrint('Error updating admin status: $e');
+    }
+  }
+
   Future<void> _checkLoginStatus() async {
     _isLoading = true;
     notifyListeners();
@@ -70,8 +83,11 @@ class AuthViewModel extends ChangeNotifier {
         if (user != null) {
           _isDeviceVerified = prefs.getBool('device_verified_${user.email}') ?? false;
           if (_isDeviceVerified) {
+            await _updateAdminStatus(user.uid);
             await DatabaseService.instance.syncFromCloudOnLogin(user.uid);
           }
+        } else {
+          _isAdmin = false;
         }
         _isLoading = false;
         notifyListeners();
@@ -158,6 +174,7 @@ class AuthViewModel extends ChangeNotifier {
             emailVerified: true,
             photoUrl: freshUser.photoURL,
           );
+          await _updateAdminStatus(freshUser.uid);
           await DatabaseService.instance.syncFromCloudOnLogin(freshUser.uid);
 
           _isLoading = false;
@@ -365,6 +382,7 @@ class AuthViewModel extends ChangeNotifier {
           final currentUser = auth.currentUser;
           if (currentUser != null) {
             _user = currentUser;
+            await _updateAdminStatus(currentUser.uid);
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
 
@@ -467,6 +485,7 @@ class AuthViewModel extends ChangeNotifier {
             _user = currentUser;
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;
+            await _updateAdminStatus(currentUser.uid);
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
           _isLoading = false;
@@ -505,6 +524,7 @@ class AuthViewModel extends ChangeNotifier {
             _user = currentUser;
             await prefs.setBool('device_verified_${currentUser.email}', true);
             _isDeviceVerified = true;
+            await _updateAdminStatus(currentUser.uid);
             await DatabaseService.instance.syncFromCloudOnLogin(currentUser.uid);
           }
           _isLoading = false;

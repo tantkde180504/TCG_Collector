@@ -60,7 +60,9 @@ class AdminUser {
       displayName: map['display_name'] ?? 'Trainer',
       email: map['email'] ?? '',
       photoUrl: map['photo_url'],
-      role: UserRole.fromString(map['role'] ?? 'customer'),
+      role: (map['isAdmin'] == true && (map['role'] == null || map['role'] == 'customer'))
+          ? UserRole.admin
+          : UserRole.fromString(map['role'] ?? 'customer'),
       isDisabled: map['is_disabled'] ?? false,
       emailVerified: map['email_verified'] ?? false,
       createdAt: (map['created_at'] as Timestamp?)?.toDate(),
@@ -570,7 +572,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
               _detailRow('Số điện thoại', user.phone ?? '—'),
               _detailRow('Địa chỉ', user.address ?? '—'),
               _detailRow('Số đơn hàng', stats.orderCount.toString()),
-              _detailRow('Tổng chi tiêu', '${stats.totalSpent.toStringAsFixed(0)} PG'),
+              _detailRow('Tổng chi tiêu', '\$${stats.totalSpent.toStringAsFixed(0)}'),
               const Divider(height: 32),
               const Text('Nhật ký hoạt động',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
@@ -726,6 +728,7 @@ class _UserManagementTabState extends State<UserManagementTab> {
     final uids = users.map((u) => u.uid).toList();
     final ok = await UserService.instance.adminBulkUpdate(uids, {
       'role': selectedRole.firestoreValue,
+      'isAdmin': selectedRole == UserRole.admin || selectedRole == UserRole.superAdmin,
     });
     if (ok) {
       _snack('Đã cập nhật role.');

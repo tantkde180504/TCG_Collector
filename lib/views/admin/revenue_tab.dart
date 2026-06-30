@@ -38,7 +38,7 @@ class RevenueTab extends StatelessWidget {
                   children: [
                     const Text('TỔNG DOANH THU', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                     const SizedBox(height: 8),
-                    Text('${totalRevenue.toStringAsFixed(2)} PG', 
+                    Text('\$${totalRevenue.toStringAsFixed(2)}', 
                       style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black)),
                     Text('${orders.length} giao dịch thành công', style: const TextStyle(color: Colors.black54)),
                   ],
@@ -73,7 +73,7 @@ class RevenueTab extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text('+${order.totalAmount} PG', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text('+\$${order.totalAmount}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
                             Text(order.timestamp.toString().split(' ')[0], style: const TextStyle(fontSize: 10, color: Colors.white38)),
                           ],
                         ),
@@ -136,8 +136,8 @@ class RevenueTab extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: Image.network(item.card.imageUrl, width: 40),
                 title: Text(item.card.name),
-                subtitle: Text('${item.card.marketPrice} PG x ${item.quantity}'),
-                trailing: Text('${(item.card.marketPrice * item.quantity).toStringAsFixed(1)} PG', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('\$${item.card.marketPrice} x ${item.quantity}'),
+                trailing: Text('\$${(item.card.marketPrice * item.quantity).toStringAsFixed(1)}', style: const TextStyle(fontWeight: FontWeight.bold)),
               )),
               
               const Divider(height: 40),

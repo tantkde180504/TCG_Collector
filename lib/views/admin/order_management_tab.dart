@@ -182,7 +182,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(item.card.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                                Text('Số lượng: ${item.quantity} | Giá: ${item.card.marketPrice} PG', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                Text('Số lượng: ${item.quantity} | Giá: \$${item.card.marketPrice}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -195,7 +195,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Tổng cộng:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                      Text('${order.totalAmount} PG', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.amber)),
+                      Text('\$${order.totalAmount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.amber)),
                     ],
                   ),
                 ],
@@ -322,7 +322,7 @@ class _OrderManagementTabState extends State<OrderManagementTab> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Tổng tiền: ${order.totalAmount} PG',
+                                    'Tổng tiền: \$${order.totalAmount}',
                                     style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                   const Divider(color: Colors.white12, height: 16),
