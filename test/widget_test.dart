@@ -1,12 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tcg/main.dart';
+import 'package:tcg/viewmodels/settings_viewmodel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('App Boot Smoke Test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    // Initialize SharedPreferences with mock values
+    SharedPreferences.setMockInitialValues({});
     
-    // Verify that the login gateway is displayed initial status
+    // Create required SettingsViewModel
+    final settingsVM = SettingsViewModel();
+    
+    // Build our app and trigger a frame.
+    // We remove 'const' because settingsVM is a dynamic object
+    await tester.pumpWidget(MyApp(settingsVM: settingsVM));
+    
+    // Verify that MyApp is rendered
     expect(find.byType(MyApp), findsOneWidget);
   });
 }

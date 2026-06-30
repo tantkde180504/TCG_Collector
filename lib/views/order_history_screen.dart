@@ -90,6 +90,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     
     Color statusColor;
     switch (order.status.toLowerCase()) {
+      case 'paid':
+        statusColor = Colors.teal;
+        break;
       case 'processing':
         statusColor = Colors.orange;
         break;
@@ -371,6 +374,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   Widget _buildStatusBadge(String status) {
     Color statusColor;
     switch (status.toLowerCase()) {
+      case 'paid':
+        statusColor = Colors.teal;
+        break;
       case 'processing':
         statusColor = Colors.orange;
         break;
@@ -405,6 +411,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final lowerStatus = status.toLowerCase();
 
     bool isUnpaid = lowerStatus == 'unpaid';
+    bool isPaid = lowerStatus == 'paid' || lowerStatus == 'processing' || lowerStatus == 'shipped' || lowerStatus == 'delivered';
     bool isProcessing = lowerStatus == 'processing' || lowerStatus == 'shipped' || lowerStatus == 'delivered';
     bool isShipped = lowerStatus == 'shipped' || lowerStatus == 'delivered';
     bool isDelivered = lowerStatus == 'delivered';
@@ -426,6 +433,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           color: isUnpaid ? Colors.white24 : Colors.green,
           title: 'Order Placed',
           subtitle: 'Invoice created successfully',
+          isLast: false,
+        ),
+        _buildTimelineDivider(isPaid),
+        _buildTimelineStep(
+          icon: isPaid ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+          color: isPaid ? Colors.teal : Colors.white24,
+          title: 'Payment Confirmed',
+          subtitle: 'Payment has been verified by Admin',
           isLast: false,
         ),
         _buildTimelineDivider(isProcessing),

@@ -435,8 +435,12 @@ class CartViewModel extends ChangeNotifier {
     
     // Nếu UID thay đổi hoặc chưa có subscription, đăng ký lại
     if (_ordersSubscription != null && _currentSubscriptionUid == firebaseUid) {
-      // Đã đang lắng nghe đúng user, chỉ cần đảm bảo dữ liệu mới nhất
       await refreshUnpaidPayOSOrders(catalog);
+      // Ngay cả khi subscription đã tồn tại, vẫn load lại từ SQLite 
+      // vì quá trình sync ngầm có thể đã cập nhật DB local.
+      final allOrders = await _db.getOrders(catalog);
+      _orders = allOrders.where((o) => o.userId == userId).toList();
+      notifyListeners();
       return;
     }
 
@@ -477,6 +481,13 @@ class CartViewModel extends ChangeNotifier {
       
       // 3. Thực hiện đồng bộ ngầm
       await _db.syncOrdersFromCloud();
+      
+      // 4. Cập nhật lại UI một lần nữa sau khi Sync hoàn tất
+      // Điều này quan trọng vì Sync cập nhật SQLite, nhưng không tự trigger Stream nếu dữ liệu Cloud không đổi
+      allOrders = await _db.getOrders(catalog);
+      _orders = allOrders.where((o) => o.userId == userId).toList();
+      notifyListeners();
+
       await refreshUnpaidPayOSOrders(catalog);
 
     } catch (e) {
@@ -520,7 +531,10 @@ class CartViewModel extends ChangeNotifier {
 
     try {
       // 1. Lưu vào đơn hàng cá nhân (SQLite + Firestore user subcollection)
-      await _db.saveOrder(updatedOrder);
+      // Sử dụng syncStatus: false để không đè trạng thái 'status' cũ lên Cloud
+      await _db.saveOrder(updatedOrder, syncStatus: false);
+      
+      // Cập nhật local list
       _orders[index] = updatedOrder;
 
       // 2. Lưu vào bộ sưu tập reviews công khai cho từng sản phẩm

@@ -113,7 +113,7 @@ class DatabaseService {
     }
   }
 
-  Future<void> _syncOrderToCloud(OrderItem order) async {
+  Future<void> _syncOrderToCloud(OrderItem order, {bool syncStatus = true}) async {
     if (!_isFirebaseInitialized) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && await _hasInternet()) {
@@ -123,12 +123,18 @@ class DatabaseService {
         orderMap['orderCode'] = numericId;
         orderMap['sync_timestamp'] = FieldValue.serverTimestamp();
         
+        // Nếu không cần đồng bộ status (ví dụ khi khách hàng update feedback),
+        // xóa status khỏi map để tránh ghi đè trạng thái Admin đã cập nhật trên Cloud.
+        if (!syncStatus) {
+          orderMap.remove('status');
+        }
+        
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('orders')
             .doc(order.orderId)
-            .set(orderMap);
+            .set(orderMap, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Failed to sync order to Firestore: $e');
       }
@@ -180,10 +186,12 @@ class DatabaseService {
 
     try {
       final db = await database;
-      // Đẩy đơn hàng từ local lên Firebase trước
-      await _syncLocalOrdersToCloud(user, db);
-      // Lấy đơn hàng từ Firebase về local
+      // 1. Ưu tiên lấy đơn hàng từ Firebase về local trước 
+      // để cập nhật trạng thái mới nhất từ Admin (Source of Truth)
       await _mergeOrdersFromCloud(user.uid, db);
+      
+      // 2. Sau đó mới đẩy đơn hàng từ local lên Firebase (để sync những đơn mới tạo hoặc feedback mới)
+      await _syncLocalOrdersToCloud(user, db);
     } catch (e) {
       debugPrint('Failed to sync orders from cloud: $e');
     }
@@ -201,14 +209,18 @@ class DatabaseService {
         final numericId = int.tryParse(orderId.replaceAll(RegExp(r'\D'), '')) ?? DateTime.now().millisecondsSinceEpoch;
         final cloudMap = Map<String, dynamic>.from(map);
         cloudMap['orderCode'] = numericId;
-        // Bỏ qua sync_timestamp bằng serverTimestamp ở batch để tối ưu tốc độ hoặc để client tự resolve
+        
+        // QUAN TRỌNG: Khi đồng bộ định kỳ, tuyệt đối không đẩy 'status' từ Local lên Cloud.
+        // Trạng thái đơn hàng do Admin quản lý trên Cloud là Source of Truth.
+        // Việc đẩy status local (có thể cũ) sẽ ghi đè mất thay đổi của Admin.
+        cloudMap.remove('status');
         
         batch.set(collection.doc(orderId), cloudMap, SetOptions(merge: true));
       }
       
       if (maps.isNotEmpty) {
         await batch.commit();
-        debugPrint('Synced ${maps.length} local orders to Firebase.');
+        debugPrint('Synced ${maps.length} local orders to Firebase (excluding status).');
       }
     } catch (e) {
       debugPrint('Failed to sync local orders to cloud: $e');
@@ -598,21 +610,21 @@ class DatabaseService {
     return null;
   }
 
-  Future<void> saveOrder(OrderItem order) async {
+  Future<void> saveOrder(OrderItem order, {bool syncStatus = true}) async {
     final db = await database;
     if (_useFallback || db == null) {
       _upsertFallbackOrder(order.toMap());
-      await _syncOrderToCloud(order);
+      await _syncOrderToCloud(order, syncStatus: syncStatus);
       return;
     }
 
     try {
       await db.insert('orders', order.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      await _syncOrderToCloud(order);
+      await _syncOrderToCloud(order, syncStatus: syncStatus);
     } catch (e) {
       debugPrint('Failed save SQLite order: $e');
       _upsertFallbackOrder(order.toMap());
-      await _syncOrderToCloud(order);
+      await _syncOrderToCloud(order, syncStatus: syncStatus);
     }
   }
 
